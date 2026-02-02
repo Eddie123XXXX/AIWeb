@@ -1,22 +1,22 @@
 """
 Vercel Serverless Function 入口文件
+使用 Mangum 适配器将 FastAPI 转换为 AWS Lambda/Vercel 兼容格式
 """
 import sys
 import os
 
-# 将父目录添加到 Python 路径，以便导入项目模块
-# 必须在导入其他模块之前执行
+# 将父目录添加到 Python 路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-# 现在可以安全导入项目模块
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from mangum import Mangum
 from routers import chat, models
 
-# 创建 FastAPI 应用（Vercel 不支持 lifespan，使用简化版本）
+# 创建 FastAPI 应用
 app = FastAPI(
     title="AI 聊天平台",
     description="多模型 LLM 聊天服务 API",
@@ -26,7 +26,7 @@ app = FastAPI(
 # CORS 配置
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应限制具体域名
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,5 +54,5 @@ async def health_check():
     return {"status": "healthy"}
 
 
-# Vercel 需要导出 app
-handler = app
+# 使用 Mangum 适配器 - 这是 Vercel 需要的格式
+handler = Mangum(app, lifespan="off")
