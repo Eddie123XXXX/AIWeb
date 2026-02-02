@@ -1,2 +1,2 @@
 # AIWeb
-person AIWeb
+personal AIWeb
