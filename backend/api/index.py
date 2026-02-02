@@ -2,11 +2,16 @@
 Vercel Serverless Function 入口文件
 """
 import sys
-from pathlib import Path
+import os
 
 # 将父目录添加到 Python 路径，以便导入项目模块
-sys.path.append(str(Path(__file__).parent.parent))
+# 必须在导入其他模块之前执行
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
+# 现在可以安全导入项目模块
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import chat, models
@@ -49,5 +54,5 @@ async def health_check():
     return {"status": "healthy"}
 
 
-# Vercel 需要的 handler（可选，FastAPI 会自动处理）
+# Vercel 需要导出 app
 handler = app

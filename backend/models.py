@@ -22,6 +22,8 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     """聊天请求"""
+    model_config = {"protected_namespaces": ()}
+    
     model_id: str = Field(..., description="使用的模型配置ID")
     messages: List[Message] = Field(..., description="对话历史")
     stream: bool = Field(default=True, description="是否流式返回")
@@ -38,6 +40,8 @@ class ChatResponse(BaseModel):
 
 class ModelConfigCreate(BaseModel):
     """创建模型配置的请求"""
+    model_config = {"protected_namespaces": ()}
+    
     id: str = Field(..., description="配置唯一标识")
     name: str = Field(..., description="显示名称")
     provider: str = Field(..., description="提供商: openai, anthropic, deepseek, qwen, moonshot, zhipu, custom")
@@ -50,6 +54,8 @@ class ModelConfigCreate(BaseModel):
 
 class ModelConfigResponse(BaseModel):
     """模型配置响应（隐藏API Key）"""
+    model_config = {"protected_namespaces": ()}
+    
     id: str
     name: str
     provider: str
