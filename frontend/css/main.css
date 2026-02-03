@@ -542,6 +542,16 @@ details > summary::-webkit-details-marker {
   width: 100%;
 }
 
+/* 开始聊天后：顶部欢迎文案隐藏，内容从上方开始排列 */
+.welcome--has-chat {
+  justify-content: flex-start;
+  padding-top: 1.5rem;
+}
+
+.welcome--has-chat .welcome__head {
+  display: none;
+}
+
 .welcome__inner {
   width: 100%;
   max-width: 48rem;
@@ -612,6 +622,47 @@ details > summary::-webkit-details-marker {
   .welcome__cards {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* ========== 聊天消息区域 ========== */
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  overflow-y: auto;
+}
+
+.welcome--has-chat .chat {
+  /* 占据更多竖向空间，让对话延伸整个内容区 */
+  max-height: none;
+  padding-bottom: 4rem;
+}
+
+.chat__message {
+  max-width: 80%;
+  padding: 0.6rem 0.9rem;
+  border-radius: 1rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  box-shadow: var(--shadow-card);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.chat__message--user {
+  margin-left: auto;
+  background: linear-gradient(135deg, var(--color-primary), #6366f1);
+  color: #fff;
+  border-bottom-right-radius: 0.2rem;
+}
+
+.chat__message--assistant {
+  margin-right: auto;
+  background: var(--color-card-bg);
+  color: var(--color-charcoal);
+  border-bottom-left-radius: 0.2rem;
+  border: 1px solid var(--color-card-border);
 }
 
 .welcome__card {
