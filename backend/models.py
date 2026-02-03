@@ -1,10 +1,15 @@
 """
 数据模型定义
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+
+
+class BaseSchema(BaseModel):
+    """统一基础模型，关闭受保护命名空间限制"""
+    model_config = ConfigDict(protected_namespaces=())
 
 
 class Role(str, Enum):
@@ -14,16 +19,14 @@ class Role(str, Enum):
     ASSISTANT = "assistant"
 
 
-class Message(BaseModel):
+class Message(BaseSchema):
     """单条消息"""
     role: Role
     content: str
 
 
-class ChatRequest(BaseModel):
+class ChatRequest(BaseSchema):
     """聊天请求"""
-    model_config = {"protected_namespaces": ()}
-    
     model_id: str = Field(..., description="使用的模型配置ID")
     messages: List[Message] = Field(..., description="对话历史")
     stream: bool = Field(default=True, description="是否流式返回")
@@ -31,17 +34,15 @@ class ChatRequest(BaseModel):
     max_tokens: Optional[int] = Field(default=None, description="最大token数，覆盖模型默认值")
 
 
-class ChatResponse(BaseModel):
+class ChatResponse(BaseSchema):
     """非流式聊天响应"""
     content: str
     model: str
     usage: Optional[dict] = None
 
 
-class ModelConfigCreate(BaseModel):
+class ModelConfigCreate(BaseSchema):
     """创建模型配置的请求"""
-    model_config = {"protected_namespaces": ()}
-    
     id: str = Field(..., description="配置唯一标识")
     name: str = Field(..., description="显示名称")
     provider: str = Field(..., description="提供商: openai, anthropic, deepseek, qwen, moonshot, zhipu, custom")
@@ -52,10 +53,8 @@ class ModelConfigCreate(BaseModel):
     temperature: float = Field(default=0.7, description="默认温度")
 
 
-class ModelConfigResponse(BaseModel):
+class ModelConfigResponse(BaseSchema):
     """模型配置响应（隐藏API Key）"""
-    model_config = {"protected_namespaces": ()}
-    
     id: str
     name: str
     provider: str
@@ -66,7 +65,7 @@ class ModelConfigResponse(BaseModel):
     api_key_preview: str  # 只显示部分 key
 
 
-class ConversationInfo(BaseModel):
+class ConversationInfo(BaseSchema):
     """对话信息"""
     id: str
     title: str

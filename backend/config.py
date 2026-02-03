@@ -2,7 +2,7 @@
 配置管理模块
 支持多个 LLM 提供商的配置
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 
@@ -16,6 +16,9 @@ class ModelConfig(BaseModel):
     api_base: Optional[str] = None  # 自定义 API 地址
     max_tokens: int = 4096
     temperature: float = 0.7
+    
+    # 关闭受保护命名空间限制，允许使用 model_id / model_name 等字段名
+    model_config = ConfigDict(protected_namespaces=())
 
 
 # 预定义的提供商配置
