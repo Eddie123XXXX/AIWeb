@@ -2,9 +2,14 @@
 AI 聊天平台后端
 基于 FastAPI 构建的多模型 LLM 聊天服务
 """
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+
+# 必须先加载 .env，再导入依赖环境变量的路由模块
+load_dotenv()
+
 from routers import chat, models
 
 

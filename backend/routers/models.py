@@ -1,8 +1,11 @@
 """
 模型配置管理路由
 """
-from fastapi import APIRouter, HTTPException
+import os
 from typing import List
+
+from fastapi import APIRouter, HTTPException
+
 from models import ModelConfigCreate, ModelConfigResponse
 from config import ModelConfig, PROVIDER_CONFIGS
 
@@ -10,6 +13,66 @@ router = APIRouter(prefix="/models", tags=["models"])
 
 # 内存存储模型配置（生产环境应使用数据库）
 model_configs: dict[str, ModelConfig] = {}
+
+
+def _init_default_model_from_env() -> None:
+  """
+  从环境变量中加载默认模型配置（可选）
+
+  相关环境变量：
+  - DEFAULT_MODEL_ID
+  - DEFAULT_MODEL_NAME
+  - DEFAULT_MODEL_PROVIDER
+  - DEFAULT_MODEL_MODEL_NAME
+  - DEFAULT_MODEL_API_KEY
+  - DEFAULT_MODEL_API_BASE
+  - DEFAULT_MODEL_MAX_TOKENS
+  - DEFAULT_MODEL_TEMPERATURE
+  """
+  model_id = os.getenv("DEFAULT_MODEL_ID")
+  if not model_id:
+      return
+
+  # 已存在则不重复创建
+  if model_id in model_configs:
+      return
+
+  provider = os.getenv("DEFAULT_MODEL_PROVIDER")
+  name = os.getenv("DEFAULT_MODEL_NAME") or model_id
+  model_name = os.getenv("DEFAULT_MODEL_MODEL_NAME")
+  api_key = os.getenv("DEFAULT_MODEL_API_KEY")
+  api_base = os.getenv("DEFAULT_MODEL_API_BASE") or None
+
+  if not provider or not model_name or not api_key:
+      # 配置不完整时直接跳过，避免启动失败
+      return
+
+  try:
+      max_tokens = int(os.getenv("DEFAULT_MODEL_MAX_TOKENS", "4096"))
+  except ValueError:
+      max_tokens = 4096
+
+  try:
+      temperature = float(os.getenv("DEFAULT_MODEL_TEMPERATURE", "0.7"))
+  except ValueError:
+      temperature = 0.7
+
+  config = ModelConfig(
+      id=model_id,
+      name=name,
+      provider=provider,
+      model_name=model_name,
+      api_key=api_key,
+      api_base=api_base,
+      max_tokens=max_tokens,
+      temperature=temperature,
+  )
+
+  model_configs[model_id] = config
+
+
+# 模块导入时尝试从环境变量中预加载一个默认模型
+_init_default_model_from_env()
 
 
 def mask_api_key(api_key: str) -> str:

@@ -1,14 +1,13 @@
 """
 聊天路由
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from models import ChatRequest, ChatResponse
 from services.llm_service import LLMService, generate_sse_stream
 from routers.models import get_model_config_by_id
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-
 
 @router.post("", summary="发送聊天消息")
 async def chat(request: ChatRequest):
@@ -69,3 +68,74 @@ async def chat_completions(request: ChatRequest):
     方便前端使用现有的 OpenAI SDK
     """
     return await chat(request)
+
+
+@router.websocket("/ws")
+async def websocket_chat(websocket: WebSocket):
+    """
+    WebSocket 聊天接口
+    - 前端通过 ws://HOST/api/chat/ws 连接
+    - 发送的数据格式与 ChatRequest 相同（JSON）
+    - 支持流式和非流式返回
+    """
+    await websocket.accept()
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+
+            # 解析请求体
+            try:
+                request = ChatRequest(**data)
+            except Exception as e:
+                await websocket.send_json(
+                    {"error": f"请求格式错误: {str(e)}", "done": True}
+                )
+                continue
+
+            # 获取模型配置
+            try:
+                model_config = get_model_config_by_id(request.model_id)
+            except HTTPException as e:
+                await websocket.send_json({"error": e.detail, "done": True})
+                continue
+
+            llm_service = LLMService(model_config)
+
+            # 流式 / 非流式返回
+            if request.stream:
+                try:
+                    async for content in llm_service.chat_stream(
+                        request.messages,
+                        request.temperature,
+                        request.max_tokens,
+                    ):
+                        await websocket.send_json(
+                            {"content": content, "done": False}
+                        )
+
+                    await websocket.send_json(
+                        {"content": "", "done": True}
+                    )
+                except Exception as e:
+                    await websocket.send_json(
+                        {"error": f"调用 LLM 失败: {str(e)}", "done": True}
+                    )
+            else:
+                try:
+                    content = await llm_service.chat(
+                        request.messages,
+                        request.temperature,
+                        request.max_tokens,
+                    )
+                    await websocket.send_json(
+                        {"content": content, "done": True}
+                    )
+                except Exception as e:
+                    await websocket.send_json(
+                        {"error": f"调用 LLM 失败: {str(e)}", "done": True}
+                    )
+
+    except WebSocketDisconnect:
+        # 客户端关闭连接时静默退出循环
+        return
