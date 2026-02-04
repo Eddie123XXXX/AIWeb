@@ -592,6 +592,14 @@ details > summary::-webkit-details-marker {
   margin: 0;
 }
 
+.welcome__greeting {
+  color: #7dd3fc;
+}
+
+[data-theme="dark"] .welcome__greeting {
+  color: #93c5fd;
+}
+
 @media (min-width: 768px) {
   .welcome__title {
     font-size: 3.75rem;
@@ -659,10 +667,107 @@ details > summary::-webkit-details-marker {
 
 .chat__message--assistant {
   margin-right: auto;
-  background: var(--color-card-bg);
+  max-width: 100%;
+  padding: 0; /* 让内容自己决定排版，不再被“气泡”内边距限制 */
+  background: transparent; /* 去掉对话框背景 */
   color: var(--color-charcoal);
-  border-bottom-left-radius: 0.2rem;
-  border: 1px solid var(--color-card-border);
+  border: none; /* 去掉边框 */
+  box-shadow: none; /* 去掉阴影 */
+  border-radius: 0; /* 不再是一个气泡 */
+}
+
+.chat__message--assistant.chat__message--markdown {
+  white-space: normal;
+}
+
+.chat__message--assistant.chat__message--markdown p {
+  margin: 0.25rem 0;
+}
+
+.chat__message--assistant pre {
+  margin-top: 0.5rem;
+  margin-bottom: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  overflow: auto;
+  position: relative;
+}
+
+.chat__message--assistant code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85em;
+}
+
+.code-copy-btn {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  padding: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: rgba(15, 23, 42, 0.8);
+  color: #e5e7eb;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+
+.chat__message--assistant pre:hover .code-copy-btn {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.code-copy-btn:hover {
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.code-copy-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* 代码块在不同主题下的底色与基础文字颜色（即使没有 hljs 也能看清） */
+[data-theme="light"] .chat__message--assistant pre {
+  background: #020617; /* 黑底 */
+  color: #e5e7eb;
+}
+
+[data-theme="light"] .chat__message--assistant code {
+  color: #e5e7eb;
+}
+
+[data-theme="dark"] .chat__message--assistant pre {
+  background: #f9fafb; /* 白底 */
+  color: #111827;
+}
+
+[data-theme="dark"] .chat__message--assistant code {
+  color: #111827;
+}
+
+/* 自定义语法高亮配色（独立于 highlight.js 的简单高亮）
+   仅作用于「代码块」里的 code，避免普通 Markdown 文本被影响 */
+.chat__message--assistant pre code .code-token-string {
+  color: #4ade80; /* 字符串：绿色 */
+}
+
+.chat__message--assistant pre code .code-token-keyword {
+  color: #60a5fa; /* 关键字：蓝色 */
+  font-weight: 600;
+}
+
+.chat__message--assistant pre code .code-token-number {
+  color: #fbbf24; /* 数字：琥珀色 */
+}
+
+.chat__message--assistant pre code .code-token-comment {
+  color: #9ca3af; /* 注释：灰色 */
+  font-style: italic;
 }
 
 .welcome__card {

@@ -71,6 +71,7 @@
     let messages = [];
     let pendingAssistant = null;
     let pendingAssistantText = '';
+    let isStreaming = false;
 
     function appendMessage(text, role) {
       const el = document.createElement('div');
@@ -79,6 +80,154 @@
       chatContainer.appendChild(el);
       chatContainer.scrollTop = chatContainer.scrollHeight;
       return el;
+    }
+
+    function updateSendButtonState() {
+      if (!sendBtn) return;
+      var icon = sendBtn.querySelector('.material-symbols-outlined');
+      if (!icon) return;
+
+      if (isStreaming) {
+        icon.textContent = 'pause';
+        sendBtn.setAttribute('aria-label', '暂停生成');
+        sendBtn.title = '暂停生成';
+      } else {
+        icon.textContent = 'send';
+        sendBtn.setAttribute('aria-label', '发送');
+        sendBtn.title = '发送';
+      }
+    }
+
+    function cancelStream() {
+      if (!isStreaming) return;
+
+      // 把当前已经生成的部分当作「完成的回答」写入对话历史，避免下一次请求继续补完它
+      if (pendingAssistant && pendingAssistantText) {
+        messages.push({
+          role: 'assistant',
+          content: pendingAssistantText
+        });
+        pendingAssistant = null;
+        pendingAssistantText = '';
+      }
+
+      isStreaming = false;
+      updateSendButtonState();
+
+      try {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+      } catch (_) {}
+    }
+
+    function simpleHighlightCode(codeEl) {
+      if (!codeEl) return;
+
+      var raw = codeEl.textContent;
+      if (!raw) return;
+
+      // 先做 HTML 转义，避免后续插入 span 时被当作标签解析
+      var html = raw
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      // 1) 字符串："..." 和 '...'（尽量覆盖转义场景）
+      html = html.replace(/"([^"\\]|\\.)*"/g, '<span class="code-token-string">$&<\/span>');
+      html = html.replace(/'([^'\\]|\\.)*'/g, '<span class="code-token-string">$&<\/span>');
+
+      // 2) 数字
+      html = html.replace(/\b\d+(\.\d+)?\b/g, '<span class="code-token-number">$&<\/span>');
+
+      // 3) 关键字（简单支持 Python + MATLAB 常见关键字）
+      var keywordPattern = '\\b(' + [
+        'def', 'return', 'for', 'while', 'if', 'elif', 'else',
+        'class', 'import', 'from', 'as', 'try', 'except', 'finally',
+        'with', 'lambda', 'function', 'end', 'switch', 'case',
+        'break', 'continue', 'global', 'persistent'
+      ].join('|') + ')\\b';
+      var keywordRegex = new RegExp(keywordPattern, 'g');
+      html = html.replace(keywordRegex, '<span class="code-token-keyword">$1<\/span>');
+
+      // 4) 注释（最后处理，整行盖住前面所有颜色）Python #、MATLAB %
+      html = html.replace(/^(\s*#.*)$/gm, '<span class="code-token-comment">$1<\/span>');
+      html = html.replace(/^(\s*%.*)$/gm, '<span class="code-token-comment">$1<\/span>');
+
+      codeEl.innerHTML = html;
+    }
+
+    function renderAssistantMarkdown(el, text) {
+      if (!el) return;
+
+      // 如果没有引入 marked，则退回到纯文本
+      if (typeof window.marked === 'undefined') {
+        el.textContent = text;
+        return;
+      }
+
+      try {
+        // 兼容不同版本的 marked：有的用 marked.parse，有的直接调用 marked()
+        var html;
+        if (typeof window.marked.parse === 'function') {
+          html = window.marked.parse(text);
+        } else if (typeof window.marked === 'function') {
+          html = window.marked(text);
+        } else {
+          el.textContent = text;
+          return;
+        }
+
+        el.innerHTML = html;
+        el.classList.add('chat__message--markdown');
+
+        // 代码高亮：先交给 highlight.js（如果有），再做一层简单自定义高亮（确保至少有字符串/关键字等颜色）
+        el.querySelectorAll('pre code').forEach(function (block) {
+          if (typeof window.hljs !== 'undefined' && window.hljs.highlightElement) {
+            try {
+              window.hljs.highlightElement(block);
+            } catch (_) {}
+          }
+          simpleHighlightCode(block);
+        });
+
+        // 为每个代码块添加复制按钮
+        el.querySelectorAll('pre').forEach(function (preEl) {
+          if (preEl.querySelector('.code-copy-btn')) return;
+
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'code-copy-btn';
+          btn.setAttribute('aria-label', '复制代码');
+          btn.title = '复制代码';
+          btn.innerHTML = '<span class="material-symbols-outlined code-copy-icon">content_copy</span>';
+
+          btn.addEventListener('click', function () {
+            var codeEl = preEl.querySelector('code');
+            var textToCopy = codeEl ? codeEl.innerText : preEl.innerText;
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(textToCopy).catch(function () {});
+            } else {
+              var ta = document.createElement('textarea');
+              ta.value = textToCopy;
+              ta.style.position = 'fixed';
+              ta.style.opacity = '0';
+              document.body.appendChild(ta);
+              ta.select();
+              try {
+                document.execCommand('copy');
+              } catch (_) {}
+              document.body.removeChild(ta);
+            }
+          });
+
+          preEl.insertBefore(btn, preEl.firstChild);
+        });
+      } catch (e) {
+        console.error(e);
+        el.textContent = text;
+      }
     }
 
     function ensureWebSocket() {
@@ -108,6 +257,10 @@
       ws.onclose = function () {
         wsReady = null;
         ws = null;
+        if (isStreaming) {
+          isStreaming = false;
+          updateSendButtonState();
+        }
       };
 
       ws.onmessage = function (event) {
@@ -117,6 +270,8 @@
           if (data.error) {
             pendingAssistantText = '';
             pendingAssistant = appendMessage('错误：' + data.error, 'assistant');
+            isStreaming = false;
+            updateSendButtonState();
             sendBtn.disabled = false;
             return;
           }
@@ -128,7 +283,8 @@
 
           if (typeof data.content === 'string') {
             pendingAssistantText += data.content;
-            pendingAssistant.textContent = pendingAssistantText || '...';
+            // 实时按 Markdown + 代码块渲染
+            renderAssistantMarkdown(pendingAssistant, pendingAssistantText || '...');
           }
 
           if (data.done) {
@@ -137,13 +293,20 @@
                 role: 'assistant',
                 content: pendingAssistantText
               });
+
+              // 完整接收后再做一次 Markdown 渲染，支持代码块/列表等样式
+              renderAssistantMarkdown(pendingAssistant, pendingAssistantText);
             }
             pendingAssistant = null;
             pendingAssistantText = '';
+            isStreaming = false;
+            updateSendButtonState();
             sendBtn.disabled = false;
           }
         } catch (e) {
           console.error(e);
+          isStreaming = false;
+          updateSendButtonState();
           sendBtn.disabled = false;
         }
       };
@@ -152,6 +315,9 @@
     }
 
     function sendMessage() {
+      // 正在流式生成时，不再触发新的发送
+      if (isStreaming) return;
+
       const text = textarea.value.trim();
       if (!text) return;
 
@@ -164,12 +330,20 @@
       messages.push({ role: 'user', content: text });
 
       textarea.value = '';
-      sendBtn.disabled = true;
+
+      // 进入流式生成状态
+      isStreaming = true;
+      updateSendButtonState();
 
       ensureWebSocket()
         .then(function () {
           if (!ws || ws.readyState !== WebSocket.OPEN) {
             throw new Error('WebSocket 未连接');
+          }
+
+          // 如果在连接建立前用户已经点击了暂停，则不再发送本次请求
+          if (!isStreaming) {
+            return;
           }
 
           const payload = {
@@ -185,11 +359,19 @@
         .catch(function (err) {
           console.error(err);
           appendMessage('错误：' + err.message, 'assistant');
+          isStreaming = false;
+          updateSendButtonState();
           sendBtn.disabled = false;
         });
     }
 
-    sendBtn.addEventListener('click', sendMessage);
+    sendBtn.addEventListener('click', function () {
+      if (isStreaming) {
+        cancelStream();
+      } else {
+        sendMessage();
+      }
+    });
 
     textarea.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && !event.shiftKey) {

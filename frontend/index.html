@@ -90,11 +90,8 @@
       <section class="welcome">
         <div class="welcome__inner animate-fade-in">
           <div class="welcome__head">
-            <div class="welcome__icon">
-              <span class="material-symbols-outlined">colors_spark</span>
-            </div>
             <h1 class="welcome__title">
-              <span class="gradient-text">你好，Alex</span>
+              <span class="welcome__greeting">你好，Alex</span>
             </h1>
             <p class="welcome__subtitle">今天想让我帮你做点什么？</p>
           </div>
@@ -157,6 +154,15 @@
     </main>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+  <script>
+    if (window.hljs) {
+      window.hljs.configure({
+        languages: ['javascript', 'typescript', 'python', 'bash', 'json', 'markdown', 'html', 'css']
+      });
+    }
+  </script>
   <script src="js/main.js"></script>
 </body>
 </html>
