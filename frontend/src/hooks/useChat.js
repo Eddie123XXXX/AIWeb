@@ -72,7 +72,7 @@ export function useChat() {
   }, []);
 
   const sendMessage = useCallback(
-    async (text) => {
+    async (text, modelId = DEFAULT_MODEL_ID) => {
       const trimmed = text?.trim();
       if (!trimmed || isStreaming) return;
 
@@ -91,7 +91,7 @@ export function useChat() {
         const nextMessages = [...messages, userMessage];
         ws.send(
           JSON.stringify({
-            model_id: DEFAULT_MODEL_ID,
+            model_id: modelId || DEFAULT_MODEL_ID,
             messages: nextMessages,
             stream: true,
             temperature: 0.7,

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Chat } from './Chat';
+import { InputArea } from './InputArea';
 
 const USER_NAME = 'Eddie';
 
@@ -7,6 +8,8 @@ export function Welcome({
   messages,
   streamingContent,
   isStreaming,
+  onSend,
+  onCancelStream,
 }) {
   const hasChat = messages.length > 0 || !!streamingContent;
   const welcomeClass = `welcome${hasChat ? ' welcome--has-chat' : ''}`;
@@ -20,6 +23,17 @@ export function Welcome({
           </h1>
           <p className="welcome__subtitle">今天想让我帮你做点什么？</p>
         </div>
+
+        {/* 还没有开始对话时，将输入框放在欢迎文案下方 */}
+        {!hasChat && (
+          <InputArea
+            onSend={onSend}
+            isStreaming={isStreaming}
+            onCancelStream={onCancelStream}
+            hasChat={false}
+          />
+        )}
+
         <Chat
           messages={messages}
           streamingContent={streamingContent}

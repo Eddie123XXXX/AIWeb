@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const RECENT_ITEMS = [
   { id: '1', icon: 'chat_bubble', label: '项目头脑风暴', active: true },
@@ -10,6 +10,31 @@ const RECENT_ITEMS = [
 export function Sidebar({ isOpen, onToggle, onNewChat }) {
   const sidebarClass = `sidebar${isOpen ? ' sidebar--open' : ' sidebar--collapsed'}`;
   const menuAriaLabel = isOpen ? '收起侧边栏' : '展开侧边栏';
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
+
+  const toggleUserMenu = () => {
+    setUserMenuOpen((prev) => !prev);
+  };
+
+  // 点击头像外部区域时自动关闭浮窗
+  useEffect(() => {
+    if (!userMenuOpen) return;
+
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [userMenuOpen]);
 
   return (
     <aside className={sidebarClass} id="sidebar" aria-label="主导航">
@@ -54,12 +79,42 @@ export function Sidebar({ isOpen, onToggle, onNewChat }) {
           <span className="material-symbols-outlined">settings</span>
           <span>设置</span>
         </button>
-        <div className="sidebar__user">
-          <div className="sidebar__avatar" role="img" aria-label="用户头像" />
-          <div className="sidebar__user-info">
-            <p className="sidebar__user-name">Eddie Xing</p>
-            <p className="sidebar__user-plan">免费版</p>
-          </div>
+        <div className="sidebar__user" ref={userMenuRef}>
+          <button
+            type="button"
+            className="sidebar__user-trigger"
+            aria-label="打开个人菜单"
+            onClick={toggleUserMenu}
+          >
+            <div className="sidebar__avatar" aria-hidden="true" />
+            <div className="sidebar__user-info">
+              <p className="sidebar__user-name">Eddie Xing</p>
+              <p className="sidebar__user-plan">免费版</p>
+            </div>
+          </button>
+
+          {userMenuOpen && (
+            <div className="sidebar__user-menu" role="menu">
+              <button type="button" className="sidebar__user-menu-item" role="menuitem">
+                <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
+                  person
+                </span>
+                <span>个人设置</span>
+              </button>
+              <button type="button" className="sidebar__user-menu-item" role="menuitem">
+                <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
+                  credit_card
+                </span>
+                <span>订阅管理</span>
+              </button>
+              <button type="button" className="sidebar__user-menu-item" role="menuitem">
+                <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
+                  logout
+                </span>
+                <span>退出登录</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </aside>

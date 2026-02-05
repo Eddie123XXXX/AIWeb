@@ -1,8 +1,10 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 
-export function InputArea({ onSend, isStreaming, onCancelStream }) {
+export function InputArea({ onSend, isStreaming, onCancelStream, hasChat }) {
   const [value, setValue] = useState('');
   const textareaRef = useRef(null);
+  const moreRef = useRef(null);
+  const [enteringFixed, setEnteringFixed] = useState(false);
 
   const handleSubmit = useCallback(() => {
     const trimmed = value.trim();
@@ -26,8 +28,44 @@ export function InputArea({ onSend, isStreaming, onCancelStream }) {
     }
   };
 
+  // 让“更多选项”的浮窗在点击外部时自动收起
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!moreRef.current) return;
+      if (moreRef.current.contains(event.target)) return;
+
+      const details = moreRef.current.querySelector('details');
+      if (details && details.open) {
+        details.open = false;
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  // 当 from “未开始对话” 切换到 “有对话（固定在底部）” 时，加一小段滑动/渐隐动画
+  useEffect(() => {
+    if (!hasChat) return;
+    setEnteringFixed(true);
+    const timer = setTimeout(() => {
+      setEnteringFixed(false);
+    }, 260);
+    return () => clearTimeout(timer);
+  }, [hasChat]);
+
+  const wrapperClass =
+    'input-area' +
+    (hasChat ? ' input-area--fixed' : ' input-area--inline') +
+    (hasChat && enteringFixed ? ' input-area--fixed-enter' : '');
+
   return (
-    <div className="input-area">
+    <div className={wrapperClass}>
       <div className="input-area__inner">
         <div className="input-box">
           <textarea
@@ -59,7 +97,7 @@ export function InputArea({ onSend, isStreaming, onCancelStream }) {
               >
                 <span className="material-symbols-outlined">mic</span>
               </button>
-              <div className="input-box__more">
+              <div className="input-box__more" ref={moreRef}>
                 <details>
                   <summary title="更多选项">
                     <span className="material-symbols-outlined">more_horiz</span>
