@@ -742,12 +742,12 @@ details > summary::-webkit-details-marker {
 }
 
 [data-theme="dark"] .chat__message--assistant pre {
-  background: #f9fafb; /* 白底 */
-  color: #111827;
+  background: #111827; /* 深灰偏黑底 */
+  color: #e5e7eb;
 }
 
 [data-theme="dark"] .chat__message--assistant code {
-  color: #111827;
+  color: #e5e7eb;
 }
 
 /* 自定义语法高亮配色（独立于 highlight.js 的简单高亮）
