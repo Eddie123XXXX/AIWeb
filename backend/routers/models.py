@@ -11,68 +11,121 @@ from config import ModelConfig, PROVIDER_CONFIGS
 
 router = APIRouter(prefix="/models", tags=["models"])
 
-# 内存存储模型配置（生产环境应使用数据库）
+    # 内存存储模型配置（生产环境应使用数据库）
 model_configs: dict[str, ModelConfig] = {}
 
 
 def _init_default_model_from_env() -> None:
-  """
-  从环境变量中加载默认模型配置（可选）
+    """
+    从环境变量中加载一个“默认模型配置”（可选）
 
-  相关环境变量：
-  - DEFAULT_MODEL_ID
-  - DEFAULT_MODEL_NAME
-  - DEFAULT_MODEL_PROVIDER
-  - DEFAULT_MODEL_MODEL_NAME
-  - DEFAULT_MODEL_API_KEY
-  - DEFAULT_MODEL_API_BASE
-  - DEFAULT_MODEL_MAX_TOKENS
-  - DEFAULT_MODEL_TEMPERATURE
-  """
-  model_id = os.getenv("DEFAULT_MODEL_ID")
-  if not model_id:
-      return
+    相关环境变量：
+    - DEFAULT_MODEL_ID
+    - DEFAULT_MODEL_NAME
+    - DEFAULT_MODEL_PROVIDER
+    - DEFAULT_MODEL_MODEL_NAME
+    - DEFAULT_MODEL_API_KEY
+    - DEFAULT_MODEL_API_BASE
+    - DEFAULT_MODEL_MAX_TOKENS
+    - DEFAULT_MODEL_TEMPERATURE
+    """
+    model_id = os.getenv("DEFAULT_MODEL_ID")
+    if not model_id:
+        return
 
-  # 已存在则不重复创建
-  if model_id in model_configs:
-      return
+    # 已存在则不重复创建
+    if model_id in model_configs:
+        return
 
-  provider = os.getenv("DEFAULT_MODEL_PROVIDER")
-  name = os.getenv("DEFAULT_MODEL_NAME") or model_id
-  model_name = os.getenv("DEFAULT_MODEL_MODEL_NAME")
-  api_key = os.getenv("DEFAULT_MODEL_API_KEY")
-  api_base = os.getenv("DEFAULT_MODEL_API_BASE") or None
+    provider = os.getenv("DEFAULT_MODEL_PROVIDER")
+    name = os.getenv("DEFAULT_MODEL_NAME") or model_id
+    model_name = os.getenv("DEFAULT_MODEL_MODEL_NAME")
+    api_key = os.getenv("DEFAULT_MODEL_API_KEY")
+    api_base = os.getenv("DEFAULT_MODEL_API_BASE") or None
 
-  if not provider or not model_name or not api_key:
-      # 配置不完整时直接跳过，避免启动失败
-      return
+    if not provider or not model_name or not api_key:
+        # 配置不完整时直接跳过，避免启动失败
+        return
 
-  try:
-      max_tokens = int(os.getenv("DEFAULT_MODEL_MAX_TOKENS", "4096"))
-  except ValueError:
-      max_tokens = 4096
+    try:
+        max_tokens = int(os.getenv("DEFAULT_MODEL_MAX_TOKENS", "4096"))
+    except ValueError:
+        max_tokens = 4096
 
-  try:
-      temperature = float(os.getenv("DEFAULT_MODEL_TEMPERATURE", "0.7"))
-  except ValueError:
-      temperature = 0.7
+    try:
+        temperature = float(os.getenv("DEFAULT_MODEL_TEMPERATURE", "0.7"))
+    except ValueError:
+        temperature = 0.7
 
-  config = ModelConfig(
-      id=model_id,
-      name=name,
-      provider=provider,
-      model_name=model_name,
-      api_key=api_key,
-      api_base=api_base,
-      max_tokens=max_tokens,
-      temperature=temperature,
-  )
+    config = ModelConfig(
+        id=model_id,
+        name=name,
+        provider=provider,
+        model_name=model_name,
+        api_key=api_key,
+        api_base=api_base,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
 
-  model_configs[model_id] = config
+    model_configs[model_id] = config
 
 
-# 模块导入时尝试从环境变量中预加载一个默认模型
+def _init_provider_models_from_env() -> None:
+    """
+    根据各家 provider 的 API Key，预配置一批常用模型。
+
+    - 如果环境变量中存在对应 provider 的 API Key，且尚未为该 provider 创建配置，
+      则自动创建一个默认模型配置。
+    - 实际可用模型名称来自 config.PROVIDER_CONFIGS 中的 models 列表。
+    """
+    # provider: (env_key, default_config_id)
+    PROVIDER_ENV_KEYS: dict[str, tuple[str, str]] = {
+        "openai": ("OPENAI_API_KEY", "openai-default"),
+        "anthropic": ("ANTHROPIC_API_KEY", "anthropic-default"),
+        "deepseek": ("DEEPSEEK_API_KEY", "deepseek-default"),
+        "qwen": ("QWEN_API_KEY", "qwen-default"),
+        "moonshot": ("MOONSHOT_API_KEY", "moonshot-default"),
+        "zhipu": ("ZHIPU_API_KEY", "zhipu-default"),
+    }
+
+    for provider, (env_key, default_id) in PROVIDER_ENV_KEYS.items():
+        api_key = os.getenv(env_key)
+        if not api_key:
+            continue
+
+        # 如果已经有同名配置（或者通过 DEFAULT_MODEL_* 创建了同 provider 的配置），就跳过
+        if default_id in model_configs:
+            continue
+
+        provider_conf = PROVIDER_CONFIGS.get(provider) or {}
+        models = provider_conf.get("models") or []
+        if not models:
+            # 没有预设模型列表时，交给用户通过 /api/models 自己添加
+            continue
+
+        # 这里简单地取该 provider 的第一个预设模型作为默认模型名
+        model_name = models[0]
+        name = f"{provider_conf.get('display_name', provider).title()} {model_name}".strip()
+        api_base = provider_conf.get("api_base")
+
+        config = ModelConfig(
+            id=default_id,
+            name=name,
+            provider=provider,
+            model_name=model_name,
+            api_key=api_key,
+            api_base=api_base,
+            max_tokens=4096,
+            temperature=0.7,
+        )
+
+        model_configs[default_id] = config
+
+
+# 模块导入时尝试从环境变量中预加载默认模型和各 provider 的默认配置
 _init_default_model_from_env()
+_init_provider_models_from_env()
 
 
 def mask_api_key(api_key: str) -> str:
