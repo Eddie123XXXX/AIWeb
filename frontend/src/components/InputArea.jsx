@@ -1,6 +1,13 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 
-export function InputArea({ onSend, isStreaming, onCancelStream, hasChat }) {
+export function InputArea({
+  onSend,
+  isStreaming,
+  onCancelStream,
+  hasChat,
+  showAttach = true,
+  showMore = true,
+}) {
   const [value, setValue] = useState('');
   const textareaRef = useRef(null);
   const moreRef = useRef(null);
@@ -81,14 +88,16 @@ export function InputArea({ onSend, isStreaming, onCancelStream, hasChat }) {
           />
           <div className="input-box__row">
             <div className="input-box__tools">
-              <button
-                type="button"
-                className="input-box__tool-btn"
-                title="附加文件"
-                aria-label="附加文件"
-              >
-                <span className="material-symbols-outlined">attach_file</span>
-              </button>
+              {showAttach && (
+                <button
+                  type="button"
+                  className="input-box__tool-btn"
+                  title="附加文件"
+                  aria-label="附加文件"
+                >
+                  <span className="material-symbols-outlined">attach_file</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="input-box__tool-btn"
@@ -97,28 +106,30 @@ export function InputArea({ onSend, isStreaming, onCancelStream, hasChat }) {
               >
                 <span className="material-symbols-outlined">mic</span>
               </button>
-              <div className="input-box__more" ref={moreRef}>
-                <details>
-                  <summary title="更多选项">
-                    <span className="material-symbols-outlined">more_horiz</span>
-                  </summary>
-                  <div className="input-box__dropdown">
-                    <button type="button" className="input-box__dropdown-btn">
-                      <span className="material-symbols-outlined">description</span>
-                      <span>浏览本地文件</span>
-                    </button>
-                    <button type="button" className="input-box__dropdown-btn">
-                      <span className="material-symbols-outlined">mic_external_on</span>
-                      <span>语音输入设置</span>
-                    </button>
-                    <hr />
-                    <button type="button" className="input-box__dropdown-btn">
-                      <span className="material-symbols-outlined">tune</span>
-                      <span>回复偏好</span>
-                    </button>
-                  </div>
-                </details>
-              </div>
+              {showMore && (
+                <div className="input-box__more" ref={moreRef}>
+                  <details>
+                    <summary title="更多选项">
+                      <span className="material-symbols-outlined">more_horiz</span>
+                    </summary>
+                    <div className="input-box__dropdown">
+                      <button type="button" className="input-box__dropdown-btn">
+                        <span className="material-symbols-outlined">description</span>
+                        <span>浏览本地文件</span>
+                      </button>
+                      <button type="button" className="input-box__dropdown-btn">
+                        <span className="material-symbols-outlined">mic_external_on</span>
+                        <span>语音输入设置</span>
+                      </button>
+                      <hr />
+                      <button type="button" className="input-box__dropdown-btn">
+                        <span className="material-symbols-outlined">tune</span>
+                        <span>回复偏好</span>
+                      </button>
+                    </div>
+                  </details>
+                </div>
+              )}
             </div>
             <button
               type="button"

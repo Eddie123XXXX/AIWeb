@@ -1,8 +1,11 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { Welcome } from './components/Welcome';
 import { InputArea } from './components/InputArea';
+import { RAGDashboard } from './pages/RAGDashboard';
+import { RAGSearch } from './pages/RAGSearch';
 import { useTheme } from './hooks/useTheme';
 import { useChat } from './hooks/useChat';
 
@@ -128,7 +131,7 @@ export function App() {
 
   const hasChat = messages.length > 0 || !!streamingContent;
 
-  return (
+  const chatPage = (
     <div className="app-root">
       <Sidebar
         isOpen={sidebarOpen}
@@ -161,5 +164,25 @@ export function App() {
         )}
       </main>
     </div>
+  );
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={chatPage} />
+        <Route path="/wiki" element={<RAGDashboard />} />
+        <Route
+          path="/wiki/search"
+          element={
+            <RAGSearch
+              models={models}
+              currentModel={currentModel}
+              defaultModelId={defaultModelId}
+              onModelChange={handleModelChange}
+            />
+          }
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }

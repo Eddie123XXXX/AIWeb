@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RAG System with Source Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3b82f6",
+                        "background-dark": "#0B0E14",
+                        "sidebar-dark": "#161B22",
+                        "card-dark": "#1C2128",
+                        "charcoal-text": "#E6EDF3",
+                        "charcoal-muted": "#8B949E",
+                        "border-dark": "#30363D",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    boxShadow: {
+                        "soft": "0 4px 20px -2px rgba(0, 0, 0, 0.5)",
+                        "card": "0 2px 8px -1px rgba(0, 0, 0, 0.3)",
+                    }
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 3px;
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #60a5fa 0%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        details > summary {
+            list-style: none;
+        }
+        details > summary::-webkit-details-marker {
+            display: none;
+        }#right-sidebar-toggle:checked ~ #right-sidebar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-background-dark font-display text-charcoal-text h-screen overflow-hidden selection:bg-blue-500/30 selection:text-white">
+<input class="hidden" id="right-sidebar-toggle" type="checkbox"/>
+<div class="flex h-full w-full">
+<aside class="hidden md:flex flex-col w-[260px] h-full bg-sidebar-dark border-r border-border-dark flex-shrink-0 z-20">
+<div class="p-4 flex flex-col gap-4">
+<div class="flex items-center justify-between px-2">
+<button class="flex items-center gap-2 text-charcoal-muted hover:bg-white/5 p-2 rounded-lg transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+<button class="flex items-center gap-3 w-full bg-primary hover:bg-blue-600 text-white px-4 py-3 rounded-xl transition-all shadow-lg shadow-blue-500/10">
+<span class="material-symbols-outlined">add</span>
+<span class="text-sm font-medium">Add Source</span>
+</button>
+</div>
+<div class="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+<p class="px-3 text-[10px] font-bold text-charcoal-muted mb-3 uppercase tracking-widest">Knowledge Sources</p>
+<div class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/5 border border-white/5 text-blue-400 group transition-all">
+<input checked="" class="rounded border-border-dark bg-background-dark text-primary focus:ring-primary focus:ring-offset-0 transition-all size-4" id="source1" type="checkbox"/>
+<label class="flex items-center gap-3 flex-1 cursor-pointer overflow-hidden" for="source1">
+<span class="material-symbols-outlined text-[20px] filled">chat_bubble</span>
+<span class="text-sm font-semibold truncate">Market Analysis Report</span>
+</label>
+</div>
+<div class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-charcoal-muted hover:bg-white/5 hover:text-charcoal-text transition-colors group">
+<input class="rounded border-border-dark bg-background-dark text-primary focus:ring-primary focus:ring-offset-0 transition-all size-4" id="source2" type="checkbox"/>
+<label class="flex items-center gap-3 flex-1 cursor-pointer overflow-hidden" for="source2">
+<span class="material-symbols-outlined text-[20px]">description</span>
+<span class="text-sm font-medium truncate">Internal Policy FAQ</span>
+</label>
+</div>
+<div class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-charcoal-muted hover:bg-white/5 hover:text-charcoal-text transition-colors group">
+<input checked="" class="rounded border-border-dark bg-background-dark text-primary focus:ring-primary focus:ring-offset-0 transition-all size-4" id="source3" type="checkbox"/>
+<label class="flex items-center gap-3 flex-1 cursor-pointer overflow-hidden" for="source3">
+<span class="material-symbols-outlined text-[20px]">description</span>
+<span class="text-sm font-medium truncate">Product Roadmap 2024</span>
+</label>
+</div>
+</div>
+<div class="p-4 border-t border-border-dark bg-sidebar-dark">
+<div class="flex flex-col gap-1">
+<button class="flex items-center gap-3 px-3 py-2 rounded-lg text-charcoal-muted hover:bg-white/5 hover:text-charcoal-text transition-colors">
+<span class="material-symbols-outlined text-[20px]">help</span>
+<span class="text-sm font-medium">Help Center</span>
+</button>
+<div class="flex items-center gap-3 mt-4 pt-4 border-t border-border-dark px-2">
+<div class="bg-center bg-no-repeat bg-cover rounded-full size-9 shadow-sm shrink-0 border border-border-dark" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBmL2D1HdPP-wq2Hi1eoVMJTnKaAUVXjmIvQv1XiFLJvfbkDDs1_V-TzReBtlwNlA0rT8kwAAIWx-Tp6Jkq0XMgmGjEP_Ffog-Wxey3q9EE50r3kUx3Sk-zCBihJqo0GsAyTgmOT2Ra0kb2955AeGqZFfi87yjTg-lcgO_L58oWifKs3acn-2L6FaJbQisje-waUlc-todH-UlNt-05oRCL2yJS8Y5syiDuKX_yj3x9cWtzBeXEdZXkUcU3d_KqKPjgCGJy5ND8-w4");'></div>
+<div class="flex flex-col overflow-hidden">
+<span class="text-sm font-bold text-charcoal-text truncate">Alex Morgan</span>
+<span class="text-xs text-charcoal-muted truncate">Enterprise Plan</span>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<main class="flex-1 flex flex-col h-full relative bg-background-dark overflow-hidden">
+<header class="flex items-center justify-between px-6 py-4 sticky top-0 z-10 bg-background-dark/80 backdrop-blur-md border-b border-border-dark/50">
+<div class="flex items-center gap-2 md:hidden">
+<button class="text-charcoal-muted p-2 hover:bg-white/5 rounded-lg transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-border-dark transition-all text-charcoal-text group">
+<span class="text-lg font-bold tracking-tight bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">RAG Assistant v2</span>
+<span class="material-symbols-outlined text-[20px] text-charcoal-muted group-hover:text-charcoal-text transition-colors">keyboard_arrow_down</span>
+</button>
+</div>
+<div class="flex items-center gap-3">
+<label class="size-10 flex items-center justify-center rounded-full bg-white/5 border border-border-dark text-charcoal-muted hover:text-primary hover:border-blue-500/50 transition-all cursor-pointer" for="right-sidebar-toggle" title="Toggle Side Panel">
+<span class="material-symbols-outlined text-[22px]">dock_to_right</span>
+</label>
+<button class="size-10 flex items-center justify-center rounded-full bg-white/5 border border-border-dark text-charcoal-muted hover:text-primary hover:border-blue-500/50 transition-all" title="Toggle theme">
+<span class="material-symbols-outlined text-[22px]">dark_mode</span>
+</button>
+<button class="h-10 px-5 rounded-full bg-white/10 hover:bg-white/15 text-charcoal-text text-sm font-semibold transition-all flex items-center">
+                    Log out
+                </button>
+</div>
+</header>
+<div class="flex-1 overflow-y-auto flex flex-col items-center p-4 pb-40 w-full">
+<div class="w-full max-w-2xl flex flex-col gap-8 mt-12">
+<div class="flex flex-col gap-3">
+<div class="size-12 mb-2 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+<span class="material-symbols-outlined text-white text-[28px]">database</span>
+</div>
+<h1 class="text-4xl font-extrabold tracking-tight text-charcoal-text">
+<span class="gradient-text">Hello, Alex</span>
+</h1>
+<p class="text-xl text-charcoal-muted">
+                        Search across your company's documents or start a new analysis.
+                    </p>
+</div>
+<div class="space-y-6">
+<div class="flex gap-4">
+<div class="size-8 rounded-lg bg-blue-600 flex-shrink-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm">smart_toy</span>
+</div>
+<div class="bg-card-dark border border-border-dark p-4 rounded-2xl rounded-tl-none max-w-[85%]">
+<p class="text-sm leading-relaxed text-charcoal-text">I've indexed the latest quarterly reports. Based on the data, would you like to see a summary of the regional sales trends or the updated compliance guidelines?</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="w-full flex justify-center pb-6 px-4 absolute bottom-0 bg-gradient-to-t from-background-dark via-background-dark to-transparent pt-12 z-20">
+<div class="w-full max-w-2xl">
+<div class="relative flex flex-col bg-card-dark rounded-[1.5rem] border border-border-dark shadow-soft focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500/50 transition-all duration-300">
+<textarea class="w-full bg-transparent border-none text-charcoal-text placeholder:text-charcoal-muted px-6 py-5 resize-none focus:ring-0 max-h-48 overflow-y-auto text-base" placeholder="Ask about your documents..." rows="1" style="min-height: 60px;"></textarea>
+<div class="flex items-center justify-between px-4 pb-4 pl-6">
+<div class="flex items-center gap-1.5">
+<button class="p-2 text-charcoal-muted hover:text-primary hover:bg-white/5 rounded-full transition-colors" title="Upload document">
+<span class="material-symbols-outlined text-[20px]">attach_file</span>
+</button>
+<button class="p-2 text-charcoal-muted hover:text-primary hover:bg-white/5 rounded-full transition-colors" title="Use Microphone">
+<span class="material-symbols-outlined text-[20px]">mic</span>
+</button>
+<details class="relative">
+<summary class="p-2 text-charcoal-muted hover:text-primary hover:bg-white/5 rounded-full transition-colors cursor-pointer flex items-center justify-center outline-none" title="More options">
+<span class="material-symbols-outlined text-[20px]">more_horiz</span>
+</summary>
+<div class="absolute bottom-full left-0 mb-3 w-56 bg-card-dark rounded-xl shadow-2xl border border-border-dark p-1.5 flex flex-col gap-0.5 z-50 animate-fade-in origin-bottom-left">
+<button class="w-full text-left px-3 py-2 text-xs font-medium text-charcoal-muted hover:text-charcoal-text hover:bg-white/5 rounded-lg transition-colors flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px]">history_edu</span>
+<span>View Audit Log</span>
+</button>
+<button class="w-full text-left px-3 py-2 text-xs font-medium text-charcoal-muted hover:text-charcoal-text hover:bg-white/5 rounded-lg transition-colors flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px]">folder_managed</span>
+<span>Manage Sources</span>
+</button>
+<div class="h-px bg-border-dark my-1 mx-2"></div>
+<button class="w-full text-left px-3 py-2 text-xs font-medium text-charcoal-muted hover:text-charcoal-text hover:bg-white/5 rounded-lg transition-colors flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px]">security</span>
+<span>Privacy Settings</span>
+</button>
+</div>
+</details>
+</div>
+<button class="p-2.5 bg-primary hover:bg-blue-600 text-white rounded-full transition-colors shadow-md shadow-blue-500/20 group">
+<span class="material-symbols-outlined text-[18px] group-hover:translate-x-0.5 transition-transform">send</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<aside class="hidden lg:flex flex-col w-[340px] h-full bg-sidebar-dark border-l border-border-dark flex-shrink-0" id="right-sidebar">
+<div class="p-5 border-b border-border-dark flex items-center justify-between">
+<h3 class="text-sm font-bold text-charcoal-text flex items-center gap-2">
+<span class="material-symbols-outlined text-blue-400 text-base">source</span>
+                Retrieved Documents
+            </h3>
+<div class="flex items-center gap-2">
+<span class="text-[10px] bg-white/5 border border-border-dark px-2 py-0.5 rounded-full text-charcoal-muted font-bold">4 SOURCED</span>
+<label class="p-1 hover:bg-white/10 rounded cursor-pointer transition-colors text-charcoal-muted" for="right-sidebar-toggle" title="Collapse Sidebar">
+<span class="material-symbols-outlined text-[20px]">chevron_right</span>
+</label>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-4 space-y-4">
+<div class="p-4 rounded-xl bg-card-dark border border-border-dark hover:border-blue-500/30 transition-all group cursor-pointer">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-blue-400 text-lg">description</span>
+<span class="text-xs font-bold text-charcoal-text truncate">Q4_Market_Trends.pdf</span>
+</div>
+<p class="text-xs text-charcoal-muted line-clamp-3 leading-relaxed">
+                    "...the steady increase in cloud infrastructure adoption across the EMEA region has led to a 14% growth in related service revenue compared to the previous fiscal year..."
+                </p>
+<div class="mt-3 flex items-center justify-between">
+<span class="text-[10px] text-charcoal-muted">Page 24 • Relevancy: 98%</span>
+<span class="material-symbols-outlined text-xs text-charcoal-muted group-hover:text-blue-400 transition-colors">open_in_new</span>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-card-dark border border-border-dark hover:border-blue-500/30 transition-all group cursor-pointer">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-emerald-400 text-lg">article</span>
+<span class="text-xs font-bold text-charcoal-text truncate">Project_Zephyr_Specs.docx</span>
+</div>
+<p class="text-xs text-charcoal-muted line-clamp-3 leading-relaxed">
+                    "Compliance guidelines for API versioning specify that all legacy endpoints must remain active for a minimum of 18 months following a major release..."
+                </p>
+<div class="mt-3 flex items-center justify-between">
+<span class="text-[10px] text-charcoal-muted">Page 12 • Relevancy: 92%</span>
+<span class="material-symbols-outlined text-xs text-charcoal-muted group-hover:text-blue-400 transition-colors">open_in_new</span>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-card-dark border border-border-dark hover:border-blue-500/30 transition-all group cursor-pointer">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-amber-400 text-lg">policy</span>
+<span class="text-xs font-bold text-charcoal-text truncate">Internal_Security_FAQ.pdf</span>
+</div>
+<p class="text-xs text-charcoal-muted line-clamp-3 leading-relaxed">
+                    "Data retention policies state that all customer-related metadata is anonymized after 30 days of inactivity and purged after 90 days..."
+                </p>
+<div class="mt-3 flex items-center justify-between">
+<span class="text-[10px] text-charcoal-muted">Page 5 • Relevancy: 85%</span>
+<span class="material-symbols-outlined text-xs text-charcoal-muted group-hover:text-blue-400 transition-colors">open_in_new</span>
+</div>
+</div>
+</div>
+<div class="p-4 bg-sidebar-dark border-t border-border-dark">
+<button class="w-full py-2 bg-white/5 border border-border-dark text-xs font-bold text-charcoal-muted hover:text-charcoal-text hover:bg-white/10 rounded-lg transition-all">
+                View All Citations
+            </button>
+</div>
+</aside>
+</div>
+
+</body></html>
