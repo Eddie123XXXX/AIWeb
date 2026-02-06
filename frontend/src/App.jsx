@@ -49,7 +49,7 @@ export function App() {
 
         const mapped = (Array.isArray(data) ? data : []).map((m) => ({
           id: m.id,
-          label: m.name || m.id,
+          label: m.display_name ?? m.name ?? m.id,
           provider: m.provider,
         }));
         setModels(mapped);

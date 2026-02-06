@@ -87,6 +87,7 @@ def _init_provider_models_from_env() -> None:
         "qwen": ("QWEN_API_KEY", "qwen-default"),
         "moonshot": ("MOONSHOT_API_KEY", "moonshot-default"),
         "zhipu": ("ZHIPU_API_KEY", "zhipu-default"),
+        "gemini": ("GEMINI_API_KEY", "gemini-default"),
     }
 
     for provider, (env_key, default_id) in PROVIDER_ENV_KEYS.items():
@@ -135,6 +136,11 @@ def mask_api_key(api_key: str) -> str:
     return f"{api_key[:4]}...{api_key[-4:]}"
 
 
+def _display_name(provider: str) -> str:
+    """从 PROVIDER_CONFIGS 取 display_name，供前端仅展示提供商名称"""
+    return (PROVIDER_CONFIGS.get(provider) or {}).get("display_name", provider)
+
+
 @router.get("/providers", summary="获取支持的提供商列表")
 async def get_providers():
     """获取所有支持的 LLM 提供商及其预设模型"""
@@ -174,6 +180,7 @@ async def add_model_config(config: ModelConfigCreate):
     return ModelConfigResponse(
         id=model_config.id,
         name=model_config.name,
+        display_name=_display_name(model_config.provider),
         provider=model_config.provider,
         model_name=model_config.model_name,
         api_base=model_config.api_base,
@@ -190,6 +197,7 @@ async def list_model_configs():
         ModelConfigResponse(
             id=config.id,
             name=config.name,
+            display_name=_display_name(config.provider),
             provider=config.provider,
             model_name=config.model_name,
             api_base=config.api_base,
@@ -211,6 +219,7 @@ async def get_model_config(model_id: str):
     return ModelConfigResponse(
         id=config.id,
         name=config.name,
+        display_name=_display_name(config.provider),
         provider=config.provider,
         model_name=config.model_name,
         api_base=config.api_base,
@@ -260,6 +269,7 @@ async def update_model_config(model_id: str, config: ModelConfigCreate):
     return ModelConfigResponse(
         id=model_config.id,
         name=model_config.name,
+        display_name=_display_name(model_config.provider),
         provider=model_config.provider,
         model_name=model_config.model_name,
         api_base=model_config.api_base,

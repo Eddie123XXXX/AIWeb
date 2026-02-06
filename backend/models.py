@@ -57,6 +57,7 @@ class ModelConfigResponse(BaseSchema):
     """模型配置响应（隐藏API Key）"""
     id: str
     name: str
+    display_name: Optional[str] = None  # 前端仅展示此名称，如 OpenAI、Claude、DeepSeek
     provider: str
     model_name: str
     api_base: Optional[str]
