@@ -24,7 +24,7 @@ class ModelConfig(BaseModel):
 # 预定义的提供商配置
 PROVIDER_CONFIGS = {
     "openai": {
-        "display_name": "OpenAI  GPT",
+        "display_name": "OpenAI  ChatGPT",
         "api_base": "https://api.openai.com/v1",
         "models": ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
     },

@@ -11,6 +11,12 @@ from contextlib import asynccontextmanager
 load_dotenv()
 
 from routers import chat, models
+from infra.minio import router as storage_router
+from infra.redis import router as redis_router
+from infra.postgres import router as postgres_router
+from infra.milvus import router as milvus_router
+from infra.rabbitmq import router as rabbitmq_router
+from infra.elasticsearch import router as es_router
 
 
 @asynccontextmanager
@@ -58,6 +64,12 @@ app.add_middleware(
 # 注册路由
 app.include_router(chat.router, prefix="/api")
 app.include_router(models.router, prefix="/api")
+app.include_router(storage_router, prefix="/api")
+app.include_router(redis_router, prefix="/api")
+app.include_router(postgres_router, prefix="/api")
+app.include_router(milvus_router, prefix="/api")
+app.include_router(rabbitmq_router, prefix="/api")
+app.include_router(es_router, prefix="/api")
 
 
 @app.get("/", tags=["root"])

@@ -24,3 +24,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Infra 本地数据（MinIO 卷等）
+infra/minio_data

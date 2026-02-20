@@ -1,0 +1,153 @@
+# MinIO + Redis + PostgreSQL + Milvus - 本地开发/测试
+# 使用方式: 在 AIWeb 项目根目录执行  docker compose -f infra/docker-compose.yml up -d
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: aiweb-minio
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console 控制台
+    environment:
+      MINIO_ROOT_USER: Eddiex
+      MINIO_ROOT_PASSWORD: 12345678
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: aiweb-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: aiweb-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: aiweb
+      POSTGRES_PASSWORD: aiweb
+      POSTGRES_DB: aiweb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  milvus-etcd:
+    image: quay.io/coreos/etcd:v3.5.25
+    container_name: aiweb-milvus-etcd
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - milvus_etcd_data:/etcd
+    command: >
+      etcd
+      -advertise-client-urls=http://aiweb-milvus-etcd:2379
+      -listen-client-urls=http://0.0.0.0:2379
+      --data-dir=/etcd
+
+  milvus-minio:
+    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
+    container_name: aiweb-milvus-minio
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    # 不暴露端口，只供 Milvus 内部使用
+    volumes:
+      - milvus_minio_data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+
+  milvus:
+    image: milvusdb/milvus:v2.6.11
+    container_name: aiweb-milvus
+    command: ["milvus", "run", "standalone"]
+    environment:
+      MINIO_REGION: us-east-1
+      ETCD_ENDPOINTS: aiweb-milvus-etcd:2379
+      MINIO_ADDRESS: aiweb-milvus-minio:9000
+    volumes:
+      - milvus_data:/var/lib/milvus
+    ports:
+      - "19530:19530"   # gRPC
+      - "9091:9091"     # RESTful
+    depends_on:
+      - milvus-etcd
+      - milvus-minio
+
+  attu:
+    image: zilliz/attu:latest
+    container_name: aiweb-milvus-attu
+    ports:
+      - "8000:3000"    # Web 控制台
+    environment:
+      MILVUS_URL: "aiweb-milvus:19530"
+    depends_on:
+      - milvus
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: aiweb-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # 管理控制台
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: aiweb-redisinsight
+    ports:
+      - "5540:5540"    # RedisInsight Web 控制台
+    environment:
+      REDIS_INSIGHT_REDIS_HOSTS: "local:aiweb-redis:6379"
+    depends_on:
+      - redis
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: aiweb-pgadmin
+    ports:
+      - "5050:80"      # pgAdmin Web 控制台
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "admin@example.com"
+      PGADMIN_DEFAULT_PASSWORD: "admin"
+    depends_on:
+      - postgres
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.29
+    container_name: aiweb-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.29
+    container_name: aiweb-kibana
+    environment:
+      ELASTICSEARCH_HOSTS: "http://aiweb-elasticsearch:9200"
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+volumes:
+  minio_data:
+  redis_data:
+  postgres_data:
+  milvus_data:
+  milvus_etcd_data:
+  milvus_minio_data:
+  elastic_data:

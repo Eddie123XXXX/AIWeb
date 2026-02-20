@@ -1093,6 +1093,12 @@ details > summary::-webkit-details-marker {
   min-height: 4rem;
   max-height: 12rem;
   overflow-y: auto;
+  scrollbar-width: none; /* Firefox：隐藏滚动条 */
+  -ms-overflow-style: none; /* IE/Edge：隐藏滚动条 */
+}
+
+.input-box__textarea::-webkit-scrollbar {
+  display: none; /* Chrome / Safari / Edge：隐藏滚动条 */
 }
 
 .input-box__textarea::placeholder {
