@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Eddie's Aiweb - Sign In</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3b82f6",
+                        "background-light": "#F8FAFC",
+                        "card-white": "#FFFFFF",
+                        "text-main": "#1E293B",
+                        "text-muted": "#64748B",
+                        "border-light": "#E2E8F0",
+                        "wechat": "#07C160"
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    boxShadow: {
+                        "elegant": "0 10px 40px -10px rgba(0, 0, 0, 0.05), 0 2px 10px -2px rgba(0, 0, 0, 0.02)",
+                    }
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        .gradient-button {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        }
+        .gradient-button:hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
+        }
+        .geometric-bg {
+            background-color: #f8fafc;
+            background-image: radial-gradient(#e2e8f0 0.8px, transparent 0.8px);
+            background-size: 24px 24px;
+        }
+        .input-focus {
+            @apply focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all;
+        }
+        .ai-logo-gradient {
+            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+        }
+    </style>
+</head>
+<body class="geometric-bg font-display text-text-main min-h-screen flex flex-col items-center justify-center p-6 selection:bg-blue-100">
+<div class="w-full max-w-[440px]">
+<div class="flex flex-col items-center mb-10">
+<div class="relative mb-4">
+<div class="size-16 rounded-2xl ai-logo-gradient flex items-center justify-center shadow-xl shadow-blue-500/20 rotate-3">
+<span class="material-symbols-outlined text-white text-4xl -rotate-3">psychology</span>
+</div>
+<div class="absolute -top-1 -right-1 size-4 bg-emerald-400 rounded-full border-2 border-white shadow-sm"></div>
+</div>
+<h1 class="text-3xl font-bold tracking-tight text-text-main">Eddie's Aiweb</h1>
+<p class="text-text-muted mt-2 font-medium">Next-Generation AI Intelligence</p>
+</div>
+<div class="bg-card-white rounded-[2.5rem] p-10 shadow-elegant border border-white">
+<div class="mb-8">
+<h2 class="text-xl font-bold">Sign in</h2>
+<p class="text-sm text-text-muted mt-1">Welcome back! Please enter your details.</p>
+</div>
+<form class="space-y-5" onsubmit="return false;">
+<div>
+<label class="block text-sm font-semibold mb-1.5 text-text-main" for="email">Email address</label>
+<input class="w-full px-4 py-3 rounded-xl border border-border-light bg-slate-50/50 text-sm input-focus" id="email" placeholder="name@company.com" type="email"/>
+</div>
+<div>
+<div class="flex items-center justify-between mb-1.5">
+<label class="block text-sm font-semibold text-text-main" for="password">Password</label>
+<a class="text-xs font-semibold text-primary hover:underline" href="#">Forgot password?</a>
+</div>
+<input class="w-full px-4 py-3 rounded-xl border border-border-light bg-slate-50/50 text-sm input-focus" id="password" placeholder="••••••••" type="password"/>
+</div>
+<div class="flex items-center gap-2 py-1">
+<input class="rounded border-border-light text-primary focus:ring-primary/20 size-4" id="remember" type="checkbox"/>
+<label class="text-xs font-medium text-text-muted cursor-pointer" for="remember">Remember me for 30 days</label>
+</div>
+<button class="w-full py-4 rounded-xl text-white font-bold text-sm gradient-button shadow-lg shadow-blue-500/20 transition-all">
+                    Sign In
+                </button>
+</form>
+<div class="relative my-8 text-center">
+<div class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-border-light"></div>
+</div>
+<span class="relative bg-white px-4 text-[10px] font-bold text-text-muted uppercase tracking-[0.2em]">Or continue with</span>
+</div>
+<div class="grid grid-cols-1 gap-4">
+<button class="flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl border border-border-light hover:bg-slate-50 transition-colors w-full group">
+<svg class="size-5" viewBox="0 0 24 24">
+<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path>
+<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z" fill="#EA4335"></path>
+</svg>
+<span class="text-sm font-semibold text-text-main">Sign in with Google</span>
+</button>
+<button class="flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl border border-border-light hover:bg-slate-50 transition-colors w-full">
+<svg class="size-6 text-wechat" fill="currentColor" viewBox="0 0 24 24">
+<path d="M8.36 11.23c-.45 0-.82-.35-.82-.79c0-.43.37-.78.82-.78c.45 0 .82.35.82.78c0 .44-.37.79-.82.79m4.84 0c-.45 0-.82-.35-.82-.79c0-.43.37-.78.82-.78s.82.35.82.78c0 .44-.37.79-.82.79M18.8 9.53c0-3.32-3.13-6.02-7-6.02C7.94 3.51 4.8 6.21 4.8 9.53c0 1.83.95 3.46 2.45 4.56l-.61 1.82l2.13-1.07c.4.11.81.16 1.23.16c.4 0 .78-.05 1.15-.12c-.11-.33-.17-.68-.17-1.05c0-2.48 2.37-4.49 5.3-4.49c.53 0 1.05.07 1.52.21m3.11 5.34c0-2.5-2.31-4.53-5.16-4.53c-2.85 0-5.16 2.03-5.16 4.53s2.31 4.53 5.16 4.53c.56 0 1.1-.08 1.6-.24l1.63.81l-.47-1.39c1.1-.81 1.8-2.03 1.8-3.41m-6.66 1.35c-.34 0-.61-.26-.61-.59c0-.33.27-.6.61-.6c.34 0 .61.27.61.6c0 .33-.27.59-.61.59m3.03 0c-.34 0-.61-.26-.61-.59c0-.33.27-.6.61-.6s.61.27.61.6c0 .33-.27.59-.61.59z"></path>
+</svg>
+<span class="text-sm font-semibold text-text-main">Sign in with WeChat</span>
+</button>
+</div>
+</div>
+<p class="text-center mt-8 text-sm text-text-muted">
+            Don't have an account? 
+            <a class="font-bold text-primary hover:underline ml-1" href="#">Sign up now</a>
+</p>
+<div class="mt-12 flex items-center justify-center gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+<a class="hover:text-text-muted transition-colors" href="#">Privacy</a>
+<span class="size-1 bg-slate-300 rounded-full"></span>
+<a class="hover:text-text-muted transition-colors" href="#">Terms</a>
+<span class="size-1 bg-slate-300 rounded-full"></span>
+<a class="hover:text-text-muted transition-colors" href="#">Support</a>
+</div>
+</div>
+
+</body></html>

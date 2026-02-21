@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
+import { getStoredUser } from '../utils/auth';
+import logoImg from '../../img/Ling_Flowing_Logo.png';
 
 const NOTEBOOKS = [
   { id: 'n1', title: 'Market Research 2024', sources: 12, updated: '2 days ago', icon: 'query_stats', iconBg: 'rgba(59, 130, 246, 0.15)', iconColor: '#60a5fa' },
@@ -10,6 +12,9 @@ const NOTEBOOKS = [
 ];
 
 export function RAGDashboard() {
+  const user = getStoredUser();
+  const displayName = user?.nickname || user?.username || user?.email || '用户';
+
   const { toggleTheme } = useTheme();
   const location = useLocation();
   const appsMenuRef = useRef(null);
@@ -37,6 +42,9 @@ export function RAGDashboard() {
       <main className="main">
         <header className="header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <Link to="/" className="rag-header__logo" aria-label="首页">
+              <img src={logoImg} alt="" className="rag-header__logo-img" />
+            </Link>
             <div className="rag-header__breadcrumb">
               <span>知识库</span>
               <span style={{ color: 'var(--color-card-border)' }}>/</span>
@@ -107,7 +115,8 @@ export function RAGDashboard() {
           <div className="welcome__inner animate-fade-in" style={{ maxWidth: '72rem' }}>
             <div className="welcome__head">
               <h1 className="welcome__title">
-                <span className="welcome__greeting">欢迎回来，Eddie</span>
+                <img src={logoImg} alt="" className="welcome__title-logo" />
+                <span className="welcome__greeting">欢迎回来，{displayName}</span>
               </h1>
               <p className="welcome__subtitle">选择笔记继续，或创建新的。</p>
             </div>

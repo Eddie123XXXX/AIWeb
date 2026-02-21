@@ -19,7 +19,7 @@ docker compose -f infra/docker-compose.yml up -d
 | Attu         | 8000        | Milvus Web 控制台        |
 | RabbitMQ     | 5672, 15672 | 消息队列 / 控制台        |
 | RedisInsight | 5540        | Redis Web 控制台         |
-| pgAdmin      | 5050        | PostgreSQL Web 控制台    |
+| pgAdmin      | 5050        | PostgreSQL Web 管理界面 |
 | Elasticsearch| 9200, 9300  | 搜索引擎（服务端）       |
 | Kibana       | 5601        | Elasticsearch Web 控制台 |
 
@@ -63,3 +63,19 @@ ELASTICSEARCH_PORT=9200
 ```
 
 MinIO：首次通过 API 上传或列表时，若桶不存在会自动创建。
+
+## pgAdmin 访问 Postgres（展开 server 后为空时必读）
+
+1. 打开 **http://localhost:5050**，登录：`admin@example.com` / `admin`。
+2. **展开 server 后看不到任何东西**：说明还没连上库。请**双击** **aiweb-postgres**（不要只点 ▶）：
+   - 会弹出密码框时，密码填 **aiweb**，勾选“保存”，确定；
+   - 连成功后，下面才会出现 **Databases** 等，再展开 **Databases** → **aiweb** → **Schemas** → **public** → **Tables**。
+3. **若双击后仍无反应或报错**：改用手动添加服务器。
+   - 在左侧 **Servers** 上**右键** → **Register** → **Server**；
+   - **General**：Name 填 `aiweb-postgres`；
+   - **Connection**：Host 填 **postgres**，Port **5432**，Maintenance database **aiweb**，Username **aiweb**，Password **aiweb**，勾选 Save password；
+   - 保存后，**双击**这个新服务器，输入密码 `aiweb`，即可展开。
+4. **若 Host 填 postgres 连不上**：在项目根执行  
+   `docker compose -f infra/docker-compose.yml up -d --force-recreate pgadmin`  
+   再试；或手动添加时 Host 改为 **host.docker.internal**（Windows/Mac Docker Desktop）试一次。
+

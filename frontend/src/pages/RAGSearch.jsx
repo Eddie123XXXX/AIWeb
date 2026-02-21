@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
+import { getStoredUser } from '../utils/auth';
 import { Chat } from '../components/Chat';
 import { InputArea } from '../components/InputArea';
+import logoImg from '../../img/Ling_Flowing_Logo.png';
 
 const KNOWLEDGE_SOURCES = [
   { id: 's1', label: 'Market Analysis Report', checked: true },
@@ -16,14 +18,22 @@ const RETRIEVED_DOCS = [
   { id: 'd3', name: 'Internal_Security_FAQ.pdf', snippet: '"Data retention policies state that all customer-related metadata is anonymized after 30 days of inactivity and purged after 90 days..."', page: 'Page 5', relevancy: '85%', iconColor: 'amber' },
 ];
 
-export function RAGSearch({ models, currentModel, defaultModelId, onModelChange }) {
+export function RAGSearch({ models, currentModel, defaultModelId, onModelChange, onLogout, onOpenProfile }) {
+  const user = getStoredUser();
+  const displayName = user?.nickname || user?.username || user?.email || '用户';
+  const planLabel = user?.plan ?? '免费版';
+  const avatarUrl = user?.avatar_url;
+
   const { toggleTheme } = useTheme();
   const location = useLocation();
   const appsMenuRef = useRef(null);
   const modelMenuRef = useRef(null);
+  const userMenuRef = useRef(null);
   const [sources, setSources] = useState(KNOWLEDGE_SOURCES);
   const [rightSidebarHidden, setRightSidebarHidden] = useState(false);
   const [appsMenuOpen, setAppsMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true
   );
@@ -43,6 +53,19 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange 
       document.removeEventListener('touchstart', handleClickOutside);
     };
   }, [appsMenuOpen]);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handleClickOutside = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setUserMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [userMenuOpen]);
 
   useEffect(() => {
     setAppsMenuOpen(false);
@@ -114,6 +137,9 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange 
                 {sidebarOpen ? 'menu_open' : 'menu'}
               </span>
             </button>
+            <Link to="/" className="sidebar__logo" aria-label="首页">
+              <img src={logoImg} alt="" className="sidebar__logo-img" />
+            </Link>
           </div>
           <button type="button" className="sidebar__new-chat">
             <span className="material-symbols-outlined">add</span>
@@ -166,21 +192,97 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange 
             <span className="material-symbols-outlined">settings</span>
             <span>设置</span>
           </button>
-          <div className="sidebar__user">
+          <div className="sidebar__user" ref={userMenuRef}>
             <button
               type="button"
               className="sidebar__user-trigger"
               aria-label="打开个人菜单"
+              onClick={() => setUserMenuOpen((prev) => !prev)}
             >
-              <div className="sidebar__avatar" aria-hidden="true" />
+              <div className="sidebar__avatar" aria-hidden="true">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="sidebar__avatar-img" />
+                ) : null}
+              </div>
               <div className="sidebar__user-info">
-                <p className="sidebar__user-name">Eddie Xing</p>
-                <p className="sidebar__user-plan">免费版</p>
+                <p className="sidebar__user-name">{displayName}</p>
+                <p className="sidebar__user-plan">{planLabel}</p>
               </div>
             </button>
+            {userMenuOpen && (
+              <div className="sidebar__user-menu" role="menu">
+                <button
+                  type="button"
+                  className="sidebar__user-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    onOpenProfile?.();
+                  }}
+                >
+                  <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
+                    person
+                  </span>
+                  <span>个人中心</span>
+                </button>
+                <button type="button" className="sidebar__user-menu-item" role="menuitem">
+                  <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
+                    credit_card
+                  </span>
+                  <span>订阅管理</span>
+                </button>
+                <button
+                  type="button"
+                  className="sidebar__user-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    setShowLogoutConfirm(true);
+                  }}
+                >
+                  <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
+                    logout
+                  </span>
+                  <span>退出登录</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </aside>
+      {showLogoutConfirm && (
+        <div
+          className="logout-confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="logout-confirm-title"
+        >
+          <div className="logout-confirm-backdrop" onClick={() => setShowLogoutConfirm(false)} />
+          <div className="logout-confirm-card">
+            <h2 id="logout-confirm-title" className="logout-confirm-title">确认退出</h2>
+            <p className="logout-confirm-desc">确定要退出当前账号吗？</p>
+            <div className="logout-confirm-actions">
+              <button
+                type="button"
+                className="logout-confirm-btn logout-confirm-btn--cancel"
+                onClick={() => setShowLogoutConfirm(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="logout-confirm-btn logout-confirm-btn--confirm"
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  onLogout?.();
+                }}
+              >
+                确认退出
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="rag-main">
         <header className="rag-header">
@@ -302,7 +404,8 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange 
           <div className="welcome__inner animate-fade-in">
             <div className="welcome__head">
               <h1 className="welcome__title">
-                <span className="welcome__greeting">你好，Eddie</span>
+                <img src={logoImg} alt="" className="welcome__title-logo" />
+                <span className="welcome__greeting">你好，{displayName}</span>
               </h1>
               <p className="welcome__subtitle">在知识库中检索文档或开始新的分析。</p>
             </div>

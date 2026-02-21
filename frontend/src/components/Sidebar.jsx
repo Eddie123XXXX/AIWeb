@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { getStoredUser } from '../utils/auth';
+import logoImg from '../../img/Ling_Flowing_Logo.png';
 
 const RECENT_ITEMS = [
   { id: '1', icon: 'chat_bubble', label: '项目头脑风暴', active: true },
@@ -7,10 +10,16 @@ const RECENT_ITEMS = [
   { id: '4', icon: 'history', label: 'Python 脚本调试' },
 ];
 
-export function Sidebar({ isOpen, onToggle, onNewChat }) {
+export function Sidebar({ isOpen, onToggle, onNewChat, onLogout, onOpenProfile }) {
+  const user = getStoredUser();
+  const displayName = user?.nickname || user?.username || user?.email || '用户';
+  const planLabel = user?.plan ?? '免费版';
+  const avatarUrl = user?.avatar_url;
+
   const sidebarClass = `sidebar${isOpen ? ' sidebar--open' : ' sidebar--collapsed'}`;
   const menuAriaLabel = isOpen ? '收起侧边栏' : '展开侧边栏';
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const userMenuRef = useRef(null);
 
   const toggleUserMenu = () => {
@@ -51,6 +60,9 @@ export function Sidebar({ isOpen, onToggle, onNewChat }) {
               {isOpen ? 'menu_open' : 'menu'}
             </span>
           </button>
+          <Link to="/" className="sidebar__logo" aria-label="首页">
+            <img src={logoImg} alt="" className="sidebar__logo-img" />
+          </Link>
         </div>
         <button type="button" className="sidebar__new-chat" onClick={onNewChat}>
           <span className="material-symbols-outlined">add</span>
@@ -86,20 +98,32 @@ export function Sidebar({ isOpen, onToggle, onNewChat }) {
             aria-label="打开个人菜单"
             onClick={toggleUserMenu}
           >
-            <div className="sidebar__avatar" aria-hidden="true" />
+            <div className="sidebar__avatar" aria-hidden="true">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="sidebar__avatar-img" />
+              ) : null}
+            </div>
             <div className="sidebar__user-info">
-              <p className="sidebar__user-name">Eddie Xing</p>
-              <p className="sidebar__user-plan">免费版</p>
+              <p className="sidebar__user-name">{displayName}</p>
+              <p className="sidebar__user-plan">{planLabel}</p>
             </div>
           </button>
 
           {userMenuOpen && (
             <div className="sidebar__user-menu" role="menu">
-              <button type="button" className="sidebar__user-menu-item" role="menuitem">
+              <button
+                type="button"
+                className="sidebar__user-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  onOpenProfile?.();
+                }}
+              >
                 <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
                   person
                 </span>
-                <span>个人设置</span>
+                <span>个人中心</span>
               </button>
               <button type="button" className="sidebar__user-menu-item" role="menuitem">
                 <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
@@ -107,7 +131,15 @@ export function Sidebar({ isOpen, onToggle, onNewChat }) {
                 </span>
                 <span>订阅管理</span>
               </button>
-              <button type="button" className="sidebar__user-menu-item" role="menuitem">
+              <button
+                type="button"
+                className="sidebar__user-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  setShowLogoutConfirm(true);
+                }}
+              >
                 <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
                   logout
                 </span>
@@ -117,6 +149,39 @@ export function Sidebar({ isOpen, onToggle, onNewChat }) {
           )}
         </div>
       </div>
+      {showLogoutConfirm && (
+        <div
+          className="logout-confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="logout-confirm-title"
+        >
+          <div className="logout-confirm-backdrop" onClick={() => setShowLogoutConfirm(false)} />
+          <div className="logout-confirm-card">
+            <h2 id="logout-confirm-title" className="logout-confirm-title">确认退出</h2>
+            <p className="logout-confirm-desc">确定要退出当前账号吗？</p>
+            <div className="logout-confirm-actions">
+              <button
+                type="button"
+                className="logout-confirm-btn logout-confirm-btn--cancel"
+                onClick={() => setShowLogoutConfirm(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="logout-confirm-btn logout-confirm-btn--confirm"
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  onLogout?.();
+                }}
+              >
+                确认退出
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

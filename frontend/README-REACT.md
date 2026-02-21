@@ -51,6 +51,18 @@ npm run build
 npm run preview
 ```
 
+## 当前界面与路由（开发环境 base: http://localhost:5173）
+
+| 路径 | 说明 |
+|------|------|
+| `/login` | 登录页（未登录时入口，邮箱+密码登录） |
+| `/register` | 注册页（邮箱、密码、用户名、手机号，对应后端 users 表） |
+| `/` | 主聊天页（首页，需登录） |
+| `/wiki` | RAG 知识库 / 仪表盘（需登录） |
+| `/wiki/search` | RAG 搜索页（需登录） |
+
+未登录访问 `/`、`/wiki`、`/wiki/search` 会重定向到 `/login`；已登录访问 `/login` 或 `/register` 会重定向到 `/`。
+
 ## 与后端联调
 
 1. 启动后端：`cd backend && uvicorn main:app --reload`

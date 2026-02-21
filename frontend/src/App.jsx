@@ -1,11 +1,18 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
+const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: true };
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { Welcome } from './components/Welcome';
 import { InputArea } from './components/InputArea';
+import { getStoredToken, setStoredToken, getAuthHeaders, clearAuth } from './utils/auth';
+import { apiUrl } from './utils/api';
+import { Login } from './pages/Login';
+import { Register } from './pages/Register';
 import { RAGDashboard } from './pages/RAGDashboard';
 import { RAGSearch } from './pages/RAGSearch';
+import { Profile } from './pages/Profile';
 import { useTheme } from './hooks/useTheme';
 import { useChat } from './hooks/useChat';
 
@@ -40,12 +47,24 @@ export function App() {
       : null
   );
 
+  // 个人中心弹窗（不占用路由）
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+
+  // 用 state 存 token，登录成功后 setToken 触发重渲染，才能正确从登录页跳转到首页
+  const [token, setTokenState] = useState(() => getStoredToken());
+  const setToken = useCallback((newToken) => {
+    if (newToken) setStoredToken(newToken);
+    else clearAuth();
+    setTokenState(newToken);
+  }, []);
+
   useEffect(() => {
+    if (!token) return;
     let cancelled = false;
 
     const loadModels = async () => {
       try {
-        const resp = await fetch('/api/models');
+        const resp = await fetch(apiUrl('/api/models'), { headers: getAuthHeaders() });
         if (!resp.ok) return;
         const data = await resp.json();
         if (cancelled) return;
@@ -75,8 +94,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token]);
 
   const currentModel = useMemo(
     () =>
@@ -137,6 +155,8 @@ export function App() {
         isOpen={sidebarOpen}
         onToggle={handleToggleSidebar}
         onNewChat={handleNewChat}
+        onLogout={() => setToken(null)}
+        onOpenProfile={() => setProfileModalOpen(true)}
       />
       <main className="main">
         <Header
@@ -167,22 +187,58 @@ export function App() {
   );
 
   return (
-    <BrowserRouter>
+    <BrowserRouter future={routerFuture}>
       <Routes>
-        <Route path="/" element={chatPage} />
-        <Route path="/wiki" element={<RAGDashboard />} />
+        <Route
+          path="/login"
+          element={token ? <Navigate to="/" replace /> : <Login onLoginSuccess={setToken} />}
+        />
+        <Route
+          path="/register"
+          element={token ? <Navigate to="/" replace /> : <Register />}
+        />
+        <Route
+          path="/"
+          element={!token ? <Navigate to="/login" replace /> : chatPage}
+        />
+        <Route
+          path="/wiki"
+          element={!token ? <Navigate to="/login" replace /> : <RAGDashboard />}
+        />
         <Route
           path="/wiki/search"
           element={
-            <RAGSearch
-              models={models}
-              currentModel={currentModel}
-              defaultModelId={defaultModelId}
-              onModelChange={handleModelChange}
-            />
+            !token ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <RAGSearch
+                models={models}
+                currentModel={currentModel}
+                defaultModelId={defaultModelId}
+                onModelChange={handleModelChange}
+                onLogout={() => setToken(null)}
+                onOpenProfile={() => setProfileModalOpen(true)}
+              />
+            )
           }
         />
       </Routes>
+      {token && profileModalOpen && (
+        <div
+          className="profile-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="profile-modal-title"
+        >
+          <div
+            className="profile-modal-backdrop"
+            onClick={() => setProfileModalOpen(false)}
+          />
+          <div className="profile-modal-panel" onClick={(e) => e.stopPropagation()}>
+            <Profile onClose={() => setProfileModalOpen(false)} />
+          </div>
+        </div>
+      )}
     </BrowserRouter>
   );
 }

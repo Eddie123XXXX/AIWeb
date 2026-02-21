@@ -11,7 +11,7 @@ from config import ModelConfig, PROVIDER_CONFIGS
 
 router = APIRouter(prefix="/models", tags=["models"])
 
-    # 内存存储模型配置（生产环境应使用数据库）
+# 内存存储模型配置（生产环境应使用数据库）
 model_configs: dict[str, ModelConfig] = {}
 
 

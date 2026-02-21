@@ -27,11 +27,17 @@ pip install -r requirements.txt
 
 ### 2. 启动服务
 
+**Windows 推荐不用 `--reload`**（否则 uvicorn 父子进程可能导致请求到不了应用，出现 404/无响应、终端无日志）：
+
 ```bash
 python main.py
-# 或者
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# 或
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
+
+也可在 backend 目录执行 `.\run.ps1`。
+
+需要热重载时再使用 `--reload`（若出现访问无响应，请改回上述方式）。
 
 ### 3. 访问 API 文档
 

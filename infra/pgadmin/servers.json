@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "aiweb-postgres",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "aiweb",
+      "Username": "aiweb",
+      "Password": "aiweb",
+      "SSLMode": "prefer"
+    }
+  }
+}

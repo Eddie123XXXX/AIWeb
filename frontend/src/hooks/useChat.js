@@ -5,7 +5,12 @@ const DEFAULT_MODEL_ID = 'default';
 function getWsUrl() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.host || 'localhost:8000';
-  return `${protocol}//${host}/api/chat/ws`;
+  let url = `${protocol}//${host}/api/chat/ws`;
+  try {
+    const token = window.localStorage.getItem('auth_token');
+    if (token) url += `?token=${encodeURIComponent(token)}`;
+  } catch (_) {}
+  return url;
 }
 
 export function useChat() {
