@@ -7,7 +7,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 
 from models import ModelConfigCreate, ModelConfigResponse
-from config import ModelConfig, PROVIDER_CONFIGS
+from config import ModelConfig, PROVIDER_CONFIGS, get_max_tokens_for_model
 
 router = APIRouter(prefix="/models", tags=["models"])
 
@@ -48,9 +48,9 @@ def _init_default_model_from_env() -> None:
         return
 
     try:
-        max_tokens = int(os.getenv("DEFAULT_MODEL_MAX_TOKENS", "4096"))
+        max_tokens = int(os.getenv("DEFAULT_MODEL_MAX_TOKENS", "8192"))
     except ValueError:
-        max_tokens = 4096
+        max_tokens = 8192
 
     try:
         temperature = float(os.getenv("DEFAULT_MODEL_TEMPERATURE", "0.7"))
@@ -109,6 +109,9 @@ def _init_provider_models_from_env() -> None:
         model_name = models[0]
         name = f"{provider_conf.get('display_name', provider).title()} {model_name}".strip()
         api_base = provider_conf.get("api_base")
+        default_max = provider_conf.get("max_tokens", 8192)
+        model_max_map = provider_conf.get("model_max_tokens") or {}
+        max_tokens = model_max_map.get(model_name, default_max)
 
         config = ModelConfig(
             id=default_id,
@@ -117,7 +120,7 @@ def _init_provider_models_from_env() -> None:
             model_name=model_name,
             api_key=api_key,
             api_base=api_base,
-            max_tokens=4096,
+            max_tokens=max_tokens,
             temperature=0.7,
         )
 
@@ -164,6 +167,7 @@ async def add_model_config(config: ModelConfigCreate):
     if config.provider == "custom" and not config.api_base:
         raise HTTPException(status_code=400, detail="custom 提供商必须提供 api_base")
     
+    max_tokens = get_max_tokens_for_model(config.provider, config.model_name)
     model_config = ModelConfig(
         id=config.id,
         name=config.name,
@@ -171,7 +175,7 @@ async def add_model_config(config: ModelConfigCreate):
         model_name=config.model_name,
         api_key=config.api_key,
         api_base=config.api_base,
-        max_tokens=config.max_tokens,
+        max_tokens=max_tokens,
         temperature=config.temperature
     )
     
@@ -252,7 +256,8 @@ async def update_model_config(model_id: str, config: ModelConfigCreate):
     # 删除旧配置
     del model_configs[model_id]
     
-    # 创建新配置
+    # 创建新配置（max_tokens 使用该模型支持的最大值）
+    max_tokens = get_max_tokens_for_model(config.provider, config.model_name)
     model_config = ModelConfig(
         id=config.id,
         name=config.name,
@@ -260,7 +265,7 @@ async def update_model_config(model_id: str, config: ModelConfigCreate):
         model_name=config.model_name,
         api_key=config.api_key,
         api_base=config.api_base,
-        max_tokens=config.max_tokens,
+        max_tokens=max_tokens,
         temperature=config.temperature
     )
     

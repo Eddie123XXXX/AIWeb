@@ -2,7 +2,9 @@ import React from 'react';
 import { Chat } from './Chat';
 import { InputArea } from './InputArea';
 import { getStoredUser } from '../utils/auth';
+import { useTranslation } from '../context/LocaleContext';
 import logoImg from '../../img/Ling_Flowing_Logo.png';
+import logoImgDark from '../../img/Image.png';
 
 export function Welcome({
   messages,
@@ -11,8 +13,9 @@ export function Welcome({
   onSend,
   onCancelStream,
 }) {
+  const t = useTranslation();
   const user = getStoredUser();
-  const displayName = user?.nickname || user?.username || user?.email || '用户';
+  const displayName = user?.nickname || user?.username || user?.email || t('user');
 
   const hasChat = messages.length > 0 || !!streamingContent;
   const welcomeClass = `welcome${hasChat ? ' welcome--has-chat' : ''}`;
@@ -22,10 +25,13 @@ export function Welcome({
       <div className="welcome__inner animate-fade-in">
         <div className="welcome__head">
           <h1 className="welcome__title">
-            <img src={logoImg} alt="" className="welcome__title-logo" />
-            <span className="welcome__greeting">你好，{displayName}</span>
+            <span className="welcome__title-logo-wrap">
+              <img src={logoImg} alt="" className="welcome__title-logo logo-img--light" />
+              <img src={logoImgDark} alt="" className="welcome__title-logo logo-img--dark" />
+            </span>
+            <span className="welcome__greeting">{t('hello')}{displayName}</span>
           </h1>
-          <p className="welcome__subtitle">今天想让我帮你做点什么？</p>
+          <p className="welcome__subtitle">{t('whatCanIDo')}</p>
         </div>
 
         {/* 还没有开始对话时，将输入框放在欢迎文案下方 */}

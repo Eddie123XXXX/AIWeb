@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { ProviderLogo } from './ProviderLogo';
+import { useTranslation } from '../context/LocaleContext';
 
 export function Header({
   onThemeToggle,
@@ -9,6 +11,7 @@ export function Header({
   onModelChange,
   defaultModelId,
 }) {
+  const t = useTranslation();
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [appsMenuOpen, setAppsMenuOpen] = useState(false);
   const modelMenuRef = useRef(null);
@@ -80,7 +83,7 @@ export function Header({
         <button
           type="button"
           className="header__mobile-menu-btn"
-          aria-label="打开菜单"
+          aria-label={t('openMenu')}
           onClick={onMobileMenuToggle}
         >
           <span className="material-symbols-outlined">menu</span>
@@ -94,7 +97,8 @@ export function Header({
           aria-expanded={modelMenuOpen}
           onClick={toggleModelMenu}
         >
-          <span className="gradient-text">{currentModel?.label ?? '模型'}</span>
+          <ProviderLogo provider={currentModel?.provider} className="header__model-logo" />
+          <span className="gradient-text">{currentModel?.label ?? t('model')}</span>
           <span className="material-symbols-outlined" aria-hidden="true">
             {modelMenuOpen ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
           </span>
@@ -113,6 +117,7 @@ export function Header({
                 aria-selected={m.id === currentModel?.id}
                 onClick={() => handleSelectModel(m.id)}
               >
+                <ProviderLogo provider={m.provider} className="header__model-menu-logo" />
                 <span>{m.label}</span>
               </button>
             ))}
@@ -130,7 +135,7 @@ export function Header({
               >
                 star
               </span>
-              <span>设为默认</span>
+              <span>{t('setAsDefault')}</span>
             </button>
           </div>
         )}
@@ -139,8 +144,8 @@ export function Header({
         <button
           type="button"
           className="header__icon-btn"
-          title="切换主题"
-          aria-label="切换主题"
+          title={t('theme')}
+          aria-label={t('theme')}
           onClick={onThemeToggle}
         >
           <span className="material-symbols-outlined theme-icon-light">light_mode</span>
@@ -153,7 +158,7 @@ export function Header({
             type="button"
             className="header__icon-btn"
             title="应用"
-            aria-label="应用"
+            aria-label={t('apps')}
             aria-haspopup="menu"
             aria-expanded={appsMenuOpen}
             onClick={toggleAppsMenu}
@@ -169,7 +174,7 @@ export function Header({
                 onClick={() => setAppsMenuOpen(false)}
               >
                 <span className="material-symbols-outlined header__model-menu-emoji">chat</span>
-                <span>AI 对话</span>
+                <span>{t('aiChat')}</span>
               </Link>
               <Link
                 to="/wiki"
@@ -178,7 +183,7 @@ export function Header({
                 onClick={() => setAppsMenuOpen(false)}
               >
                 <span className="material-symbols-outlined header__model-menu-emoji">dashboard</span>
-                <span>知识库</span>
+                <span>{t('knowledgeBase')}</span>
               </Link>
               <Link
                 to="/wiki/search"
@@ -187,7 +192,7 @@ export function Header({
                 onClick={() => setAppsMenuOpen(false)}
               >
                 <span className="material-symbols-outlined header__model-menu-emoji">search</span>
-                <span>RAG 检索</span>
+                <span>{t('ragSearch')}</span>
               </Link>
             </div>
           )}

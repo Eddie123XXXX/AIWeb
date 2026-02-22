@@ -2,9 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 import { getStoredUser } from '../utils/auth';
+import { useTranslation } from '../context/LocaleContext';
+import { LanguageDropdown } from '../components/LanguageDropdown';
 import { Chat } from '../components/Chat';
 import { InputArea } from '../components/InputArea';
+import { ProviderLogo } from '../components/ProviderLogo';
 import logoImg from '../../img/Ling_Flowing_Logo.png';
+import logoImgDark from '../../img/Image.png';
 
 const KNOWLEDGE_SOURCES = [
   { id: 's1', label: 'Market Analysis Report', checked: true },
@@ -19,9 +23,10 @@ const RETRIEVED_DOCS = [
 ];
 
 export function RAGSearch({ models, currentModel, defaultModelId, onModelChange, onLogout, onOpenProfile }) {
+  const t = useTranslation();
   const user = getStoredUser();
-  const displayName = user?.nickname || user?.username || user?.email || '用户';
-  const planLabel = user?.plan ?? '免费版';
+  const displayName = user?.nickname || user?.username || user?.email || t('user');
+  const planLabel = user?.plan ?? t('freePlan');
   const avatarUrl = user?.avatar_url;
 
   const { toggleTheme } = useTheme();
@@ -105,7 +110,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
   };
 
   const iconColorMap = { blue: 'var(--color-primary)', emerald: '#34d399', amber: '#fbbf24' };
-  const sidebarMenuLabel = sidebarOpen ? '收起侧边栏' : '展开侧边栏';
+  const sidebarMenuLabel = sidebarOpen ? t('closeSidebar') : t('openSidebar');
   const hasChat = messages.length > 0;
   const allSourcesChecked =
     sources.length > 0 && sources.every((s) => s.checked);
@@ -137,19 +142,19 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                 {sidebarOpen ? 'menu_open' : 'menu'}
               </span>
             </button>
-            <Link to="/" className="sidebar__logo" aria-label="首页">
-              <img src={logoImg} alt="" className="sidebar__logo-img" />
+            <Link to="/" className="sidebar__logo" aria-label={t('home')}>
+              <img src={logoImg} alt="" className="sidebar__logo-img logo-img--light" />
+              <img src={logoImgDark} alt="" className="sidebar__logo-img logo-img--dark" />
             </Link>
           </div>
           <button type="button" className="sidebar__new-chat">
             <span className="material-symbols-outlined">add</span>
-            <span>添加知识源</span>
+            <span>{t('addKnowledgeSource')}</span>
           </button>
         </div>
         <div className="rag-sidebar__sources">
-          <p className="rag-sidebar__sources-title">知识源</p>
+          <p className="rag-sidebar__sources-title">{t('knowledgeSourcesTitle')}</p>
 
-          {/* 选择所有来源 */}
           <label
             className="rag-source-item"
             style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
@@ -162,7 +167,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
             />
             <span className="material-symbols-outlined" style={{ fontSize: 20 }}>done_all</span>
             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.875rem', fontWeight: allSourcesChecked ? 600 : 500 }}>
-              选择所有来源
+              {t('selectAllSources')}
             </span>
           </label>
 
@@ -186,17 +191,23 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
         <div className="sidebar__bottom">
           <button type="button" className="sidebar__nav-btn">
             <span className="material-symbols-outlined">help</span>
-            <span>帮助与常见问题</span>
+            <span>{t('helpAndFaq')}</span>
           </button>
+          <LanguageDropdown placement="above">
+            <button type="button" className="sidebar__nav-btn" aria-label={t('language')}>
+              <span className="material-symbols-outlined">language</span>
+              <span>{t('language')}</span>
+            </button>
+          </LanguageDropdown>
           <button type="button" className="sidebar__nav-btn">
             <span className="material-symbols-outlined">settings</span>
-            <span>设置</span>
+            <span>{t('settings')}</span>
           </button>
           <div className="sidebar__user" ref={userMenuRef}>
             <button
               type="button"
               className="sidebar__user-trigger"
-              aria-label="打开个人菜单"
+              aria-label={t('openUserMenu')}
               onClick={() => setUserMenuOpen((prev) => !prev)}
             >
               <div className="sidebar__avatar" aria-hidden="true">
@@ -223,13 +234,13 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                   <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
                     person
                   </span>
-                  <span>个人中心</span>
+                  <span>{t('profile')}</span>
                 </button>
                 <button type="button" className="sidebar__user-menu-item" role="menuitem">
                   <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
                     credit_card
                   </span>
-                  <span>订阅管理</span>
+                  <span>{t('subscription')}</span>
                 </button>
                 <button
                   type="button"
@@ -243,7 +254,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                   <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
                     logout
                   </span>
-                  <span>退出登录</span>
+                  <span>{t('logout')}</span>
                 </button>
               </div>
             )}
@@ -259,15 +270,15 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
         >
           <div className="logout-confirm-backdrop" onClick={() => setShowLogoutConfirm(false)} />
           <div className="logout-confirm-card">
-            <h2 id="logout-confirm-title" className="logout-confirm-title">确认退出</h2>
-            <p className="logout-confirm-desc">确定要退出当前账号吗？</p>
+            <h2 id="logout-confirm-title" className="logout-confirm-title">{t('confirmLogout')}</h2>
+            <p className="logout-confirm-desc">{t('confirmLogoutDesc')}</p>
             <div className="logout-confirm-actions">
               <button
                 type="button"
                 className="logout-confirm-btn logout-confirm-btn--cancel"
                 onClick={() => setShowLogoutConfirm(false)}
               >
-                取消
+                {t('cancel')}
               </button>
               <button
                 type="button"
@@ -277,7 +288,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                   onLogout?.();
                 }}
               >
-                确认退出
+                {t('confirmLogoutBtn')}
               </button>
             </div>
           </div>
@@ -295,6 +306,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                 aria-expanded={modelMenuOpen}
                 onClick={() => setModelMenuOpen((prev) => !prev)}
               >
+                <ProviderLogo provider={currentModel?.provider} className="header__model-logo" />
                 <span className="gradient-text">
                   {currentModel?.label ?? 'RAG Assistant v2'}
                 </span>
@@ -316,6 +328,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                       aria-selected={m.id === currentModel?.id}
                       onClick={() => handleSelectModel(m.id)}
                     >
+                      <ProviderLogo provider={m.provider} className="header__model-menu-logo" />
                       <span>{m.label}</span>
                     </button>
                   ))}
@@ -333,7 +346,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                     >
                       star
                     </span>
-                    <span>设为默认</span>
+                    <span>{t('setAsDefault')}</span>
                   </button>
                 </div>
               )}
@@ -343,8 +356,8 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
             <button
               type="button"
               className="header__icon-btn"
-              title="切换主题"
-              aria-label="切换主题"
+              title={t('theme')}
+              aria-label={t('theme')}
               onClick={toggleTheme}
             >
               <span className="material-symbols-outlined theme-icon-light">light_mode</span>
@@ -356,8 +369,8 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
               <button
                 type="button"
                 className="header__icon-btn"
-                title="应用"
-                aria-label="应用"
+                title={t('apps')}
+                aria-label={t('apps')}
                 aria-haspopup="menu"
                 aria-expanded={appsMenuOpen}
                 onClick={() => setAppsMenuOpen((v) => !v)}
@@ -373,7 +386,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                     onClick={() => setAppsMenuOpen(false)}
                   >
                     <span className="material-symbols-outlined header__model-menu-emoji">chat</span>
-                    <span>AI 对话</span>
+                    <span>{t('aiChat')}</span>
                   </Link>
                   <Link
                     to="/wiki"
@@ -382,7 +395,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                     onClick={() => setAppsMenuOpen(false)}
                   >
                     <span className="material-symbols-outlined header__model-menu-emoji">dashboard</span>
-                    <span>知识库</span>
+                    <span>{t('knowledgeBase')}</span>
                   </Link>
                   <Link
                     to="/wiki/search"
@@ -391,7 +404,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                     onClick={() => setAppsMenuOpen(false)}
                   >
                     <span className="material-symbols-outlined header__model-menu-emoji">search</span>
-                    <span>RAG 检索</span>
+                    <span>{t('ragSearch')}</span>
                   </Link>
                 </div>
               )}
@@ -404,10 +417,13 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
           <div className="welcome__inner animate-fade-in">
             <div className="welcome__head">
               <h1 className="welcome__title">
-                <img src={logoImg} alt="" className="welcome__title-logo" />
-                <span className="welcome__greeting">你好，{displayName}</span>
+                <span className="welcome__title-logo-wrap">
+                  <img src={logoImg} alt="" className="welcome__title-logo logo-img--light" />
+                  <img src={logoImgDark} alt="" className="welcome__title-logo logo-img--dark" />
+                </span>
+                <span className="welcome__greeting">{t('hello')}{displayName}</span>
               </h1>
-              <p className="welcome__subtitle">在知识库中检索文档或开始新的分析。</p>
+              <p className="welcome__subtitle">{t('ragWelcomeSubtitle')}</p>
             </div>
 
             {!hasChat && (
@@ -444,7 +460,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
             <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
               source
             </span>
-            检索文档
+            {t('searchDocuments')}
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span
@@ -459,13 +475,13 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                 color: 'var(--color-charcoal-light)',
               }}
             >
-              4 条引用
+              {t('referencesCount')}
             </span>
             <button
               type="button"
               className="sidebar__menu-btn"
-              title={rightSidebarHidden ? '展开文档面板' : '收起文档面板'}
-              aria-label={rightSidebarHidden ? '展开文档面板' : '收起文档面板'}
+              title={rightSidebarHidden ? t('expandDocPanel') : t('collapseDocPanel')}
+              aria-label={rightSidebarHidden ? t('expandDocPanel') : t('collapseDocPanel')}
               onClick={() => setRightSidebarHidden((v) => !v)}
             >
               <span className="material-symbols-outlined">dock_to_left</span>
@@ -481,7 +497,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
               </div>
               <p className="rag-doc-card__snippet">{d.snippet}</p>
               <div className="rag-doc-card__meta">
-                <span>{d.page} · 相关度: {d.relevancy}</span>
+                <span>{d.page} · {t('relevancy')}: {d.relevancy}</span>
                 <span className="material-symbols-outlined" style={{ fontSize: 12 }}>open_in_new</span>
               </div>
             </div>
@@ -493,7 +509,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
             className="rag-sidebar__nav-btn"
             style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--color-card-border)', borderRadius: '0.5rem', fontSize: '0.75rem', fontWeight: 700 }}
           >
-            查看全部引用
+            {t('viewAllReferences')}
           </button>
         </div>
       </aside>

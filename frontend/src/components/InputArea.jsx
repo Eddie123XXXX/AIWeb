@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useTranslation } from '../context/LocaleContext';
 
 export function InputArea({
   onSend,
@@ -8,6 +9,7 @@ export function InputArea({
   showAttach = true,
   showMore = true,
 }) {
+  const t = useTranslation();
   const [value, setValue] = useState('');
   const textareaRef = useRef(null);
   const moreRef = useRef(null);
@@ -78,9 +80,9 @@ export function InputArea({
           <textarea
             ref={textareaRef}
             className="input-box__textarea"
-            placeholder="在此输入你的问题..."
+            placeholder={t('placeholder')}
             rows={1}
-            aria-label="输入消息"
+            aria-label={t('inputMessage')}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -134,8 +136,8 @@ export function InputArea({
             <button
               type="button"
               className="input-box__send"
-              aria-label={isStreaming ? '暂停生成' : '发送'}
-              title={isStreaming ? '暂停生成' : '发送'}
+              aria-label={isStreaming ? t('stopGenerate') : t('send')}
+              title={isStreaming ? t('stopGenerate') : t('send')}
               onClick={handleSendClick}
             >
               <span className="material-symbols-outlined">
@@ -145,7 +147,7 @@ export function InputArea({
           </div>
         </div>
         <p className="input-area__disclaimer">
-          AI 可能产生不准确信息，请务必核实重要内容。
+          {t('disclaimer')}
         </p>
       </div>
     </div>

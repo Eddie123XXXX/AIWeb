@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
+import { useTranslation } from '../context/LocaleContext';
+import { LanguageDropdown } from '../components/LanguageDropdown';
 import { getStoredUser } from '../utils/auth';
 import logoImg from '../../img/Ling_Flowing_Logo.png';
+import logoImgDark from '../../img/Image.png';
 
 const NOTEBOOKS = [
   { id: 'n1', title: 'Market Research 2024', sources: 12, updated: '2 days ago', icon: 'query_stats', iconBg: 'rgba(59, 130, 246, 0.15)', iconColor: '#60a5fa' },
@@ -12,8 +15,9 @@ const NOTEBOOKS = [
 ];
 
 export function RAGDashboard() {
+  const t = useTranslation();
   const user = getStoredUser();
-  const displayName = user?.nickname || user?.username || user?.email || '用户';
+  const displayName = user?.nickname || user?.username || user?.email || t('user');
 
   const { toggleTheme } = useTheme();
   const location = useLocation();
@@ -42,21 +46,32 @@ export function RAGDashboard() {
       <main className="main">
         <header className="header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <Link to="/" className="rag-header__logo" aria-label="首页">
-              <img src={logoImg} alt="" className="rag-header__logo-img" />
+            <Link to="/" className="rag-header__logo" aria-label={t('home')}>
+              <img src={logoImg} alt="" className="rag-header__logo-img logo-img--light" />
+              <img src={logoImgDark} alt="" className="rag-header__logo-img logo-img--dark" />
             </Link>
             <div className="rag-header__breadcrumb">
-              <span>知识库</span>
+              <span>{t('knowledgeBase')}</span>
               <span style={{ color: 'var(--color-card-border)' }}>/</span>
-              <span style={{ color: 'var(--color-charcoal)' }}>我的笔记</span>
+              <span style={{ color: 'var(--color-charcoal)' }}>{t('myNotebooks')}</span>
             </div>
           </div>
           <div className="header__actions">
+            <LanguageDropdown placement="below" menuClassName="header__apps-menu">
+              <button
+                type="button"
+                className="header__icon-btn"
+                title={t('language')}
+                aria-label={t('language')}
+              >
+                <span className="material-symbols-outlined">language</span>
+              </button>
+            </LanguageDropdown>
             <button
               type="button"
               className="header__icon-btn"
-              title="切换主题"
-              aria-label="切换主题"
+              title={t('theme')}
+              aria-label={t('theme')}
               onClick={toggleTheme}
             >
               <span className="material-symbols-outlined theme-icon-light">light_mode</span>
@@ -68,8 +83,8 @@ export function RAGDashboard() {
               <button
                 type="button"
                 className="header__icon-btn"
-                title="应用"
-                aria-label="应用"
+                title={t('apps')}
+                aria-label={t('apps')}
                 aria-haspopup="menu"
                 aria-expanded={appsMenuOpen}
                 onClick={() => setAppsMenuOpen((v) => !v)}
@@ -85,7 +100,7 @@ export function RAGDashboard() {
                     onClick={() => setAppsMenuOpen(false)}
                   >
                     <span className="material-symbols-outlined header__model-menu-emoji">chat</span>
-                    <span>AI 对话</span>
+                    <span>{t('aiChat')}</span>
                   </Link>
                   <Link
                     to="/wiki"
@@ -94,7 +109,7 @@ export function RAGDashboard() {
                     onClick={() => setAppsMenuOpen(false)}
                   >
                     <span className="material-symbols-outlined header__model-menu-emoji">dashboard</span>
-                    <span>知识库</span>
+                    <span>{t('knowledgeBase')}</span>
                   </Link>
                   <Link
                     to="/wiki/search"
@@ -103,7 +118,7 @@ export function RAGDashboard() {
                     onClick={() => setAppsMenuOpen(false)}
                   >
                     <span className="material-symbols-outlined header__model-menu-emoji">search</span>
-                    <span>RAG 检索</span>
+                    <span>{t('ragSearch')}</span>
                   </Link>
                 </div>
               )}
@@ -115,10 +130,13 @@ export function RAGDashboard() {
           <div className="welcome__inner animate-fade-in" style={{ maxWidth: '72rem' }}>
             <div className="welcome__head">
               <h1 className="welcome__title">
-                <img src={logoImg} alt="" className="welcome__title-logo" />
-                <span className="welcome__greeting">欢迎回来，{displayName}</span>
+                <span className="welcome__title-logo-wrap">
+                  <img src={logoImg} alt="" className="welcome__title-logo logo-img--light" />
+                  <img src={logoImgDark} alt="" className="welcome__title-logo logo-img--dark" />
+                </span>
+                <span className="welcome__greeting">{t('welcomeBack')}{displayName}</span>
               </h1>
-              <p className="welcome__subtitle">选择笔记继续，或创建新的。</p>
+              <p className="welcome__subtitle">{t('dashboardSubtitle')}</p>
             </div>
 
             <div className="rag-notebook-grid">
@@ -126,8 +144,8 @@ export function RAGDashboard() {
                 <div className="rag-notebook-card__icon-wrap">
                   <span className="material-symbols-outlined" style={{ fontSize: 24, color: 'var(--color-charcoal-light)' }}>add</span>
                 </div>
-                <span className="rag-notebook-card__title">新建笔记</span>
-                <span className="welcome__subtitle" style={{ fontSize: '0.875rem', marginTop: 0 }}>从新知识源开始</span>
+                <span className="rag-notebook-card__title">{t('newNotebook')}</span>
+                <span className="welcome__subtitle" style={{ fontSize: '0.875rem', marginTop: 0 }}>{t('startFromNewSource')}</span>
               </Link>
               {NOTEBOOKS.map((n) => (
                 <div key={n.id} className="rag-notebook-card" role="button" tabIndex={0} onClick={() => {}} onKeyDown={(e) => e.key === 'Enter' && {}}>
@@ -138,7 +156,7 @@ export function RAGDashboard() {
                     >
                       <span className="material-symbols-outlined" style={{ color: n.iconColor, fontSize: 24 }}>{n.icon}</span>
                     </div>
-                    <button type="button" className="header__icon-btn" style={{ padding: '0.25rem', width: '2rem', height: '2rem' }} aria-label="更多">
+                    <button type="button" className="header__icon-btn" style={{ padding: '0.25rem', width: '2rem', height: '2rem' }} aria-label={t('more')}>
                       <span className="material-symbols-outlined">more_vert</span>
                     </button>
                   </div>

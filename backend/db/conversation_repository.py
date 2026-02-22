@@ -145,6 +145,18 @@ class ConversationRepository:
         finally:
             await conn.close()
 
+    async def touch(self, conversation_id: str) -> bool:
+        """仅刷新 updated_at（例如新消息写入后用于左侧按活跃度排序）。返回是否更新了行。"""
+        conn = await _get_conn()
+        try:
+            result = await conn.execute(
+                "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND deleted_at IS NULL",
+                conversation_id,
+            )
+            return result.split()[-1] == "1"
+        finally:
+            await conn.close()
+
     async def soft_delete(self, conversation_id: str) -> bool:
         """软删除会话（设置 deleted_at）。返回是否实际更新了行。"""
         conn = await _get_conn()

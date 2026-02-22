@@ -22,15 +22,10 @@ export function App() {
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true
   );
 
-  const {
-    messages,
-    streamingContent,
-    isStreaming,
-    sendMessage,
-    cancelStream,
-  } = useChat();
+  const [conversationId, setConversationId] = useState(null);
+  const [conversations, setConversations] = useState([]);
+  const [loadingConversations, setLoadingConversations] = useState(false);
 
-  // 从后端动态加载模型列表，并与前端选择联动
   const [models, setModels] = useState([]);
   const [modelId, setModelId] = useState(() =>
     typeof window !== 'undefined'
@@ -58,6 +53,7 @@ export function App() {
     setTokenState(newToken);
   }, []);
 
+  // 从后端动态加载模型列表，并与前端选择联动
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
@@ -96,6 +92,56 @@ export function App() {
     };
   }, [token]);
 
+  const loadConversations = useCallback(
+    async (onUnauthorized) => {
+      const headers = getAuthHeaders();
+      if (!headers.Authorization) {
+        if (onUnauthorized) onUnauthorized();
+        return;
+      }
+      setLoadingConversations(true);
+      try {
+        const resp = await fetch(apiUrl('/api/history/conversations?page=1&page_size=50'), {
+          headers,
+        });
+        if (resp.status === 401) {
+          if (onUnauthorized) onUnauthorized();
+          return;
+        }
+        if (!resp.ok) return;
+        const data = await resp.json();
+        setConversations(Array.isArray(data) ? data : []);
+      } catch {
+        setConversations([]);
+      } finally {
+        setLoadingConversations(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!token) return;
+    loadConversations(() => setToken(null));
+  }, [token, loadConversations, setToken]);
+
+  const handleRoundComplete = useCallback(
+    () => {
+      // 首轮结束后后端会异步生成标题，延迟刷新侧栏列表以显示新标题
+      setTimeout(() => loadConversations(() => setToken(null)), 2500);
+    },
+    [loadConversations, setToken]
+  );
+
+  const {
+    messages,
+    setMessages,
+    streamingContent,
+    isStreaming,
+    sendMessage,
+    cancelStream,
+  } = useChat(conversationId, { onRoundComplete: handleRoundComplete });
+
   const currentModel = useMemo(
     () =>
       models.find((m) => m.id === modelId) ??
@@ -107,10 +153,82 @@ export function App() {
     setSidebarOpen((prev) => !prev);
   }, []);
 
-  const handleNewChat = useCallback(() => {
+  const handleNewChat = useCallback(async () => {
     setSidebarOpen(false);
-    // 可在此清空对话或跳转新会话
-  }, []);
+    try {
+      const resp = await fetch(apiUrl('/api/history/conversations'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ title: '新对话' }),
+      });
+      if (!resp.ok) return;
+      const conv = await resp.json();
+      setConversationId(conv.id);
+      setMessages([]);
+      setConversations((prev) => [{ ...conv, title: conv.title || '新对话' }, ...prev]);
+    } catch {
+      // 未登录或网络错误时仅清空当前视图
+      setConversationId(null);
+      setMessages([]);
+    }
+  }, [setMessages]);
+
+  const handleSelectConversation = useCallback(async (id) => {
+    setSidebarOpen(false);
+    try {
+      const resp = await fetch(apiUrl(`/api/history/conversations/${id}`), {
+        headers: getAuthHeaders(),
+      });
+      if (!resp.ok) return;
+      const detail = await resp.json();
+      setConversationId(detail.id);
+      setMessages(
+        (detail.messages || []).map((m) => ({
+          role: m.role || 'user',
+          content: m.content || '',
+        }))
+      );
+    } catch {
+      setConversationId(id);
+      setMessages([]);
+    }
+  }, [setMessages]);
+
+  const handleRenameConversation = useCallback(async (id, newTitle) => {
+    try {
+      const resp = await fetch(apiUrl(`/api/history/conversations/${id}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      if (!resp.ok) return;
+      setConversations((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, title: newTitle } : c))
+      );
+    } catch {
+      loadConversations(() => setToken(null));
+    }
+  }, [loadConversations, setToken]);
+
+  const handleDeleteConversation = useCallback(
+    async (id) => {
+      try {
+        const resp = await fetch(apiUrl(`/api/history/conversations/${id}`), {
+          method: 'DELETE',
+          headers: getAuthHeaders(),
+        });
+        if (!resp.ok) return;
+        setConversations((prev) => prev.filter((c) => c.id !== id));
+        if (conversationId === id) {
+          setConversationId(null);
+          setMessages([]);
+        }
+      } catch {
+        loadConversations(() => setToken(null));
+      }
+    },
+    [conversationId, setMessages, loadConversations, setToken]
+  );
 
   const handleSendWithModel = useCallback(
     (text) => {
@@ -157,6 +275,12 @@ export function App() {
         onNewChat={handleNewChat}
         onLogout={() => setToken(null)}
         onOpenProfile={() => setProfileModalOpen(true)}
+        conversations={conversations}
+        currentConversationId={conversationId}
+        onSelectConversation={handleSelectConversation}
+        onRenameConversation={handleRenameConversation}
+        onDeleteConversation={handleDeleteConversation}
+        loadingConversations={loadingConversations}
       />
       <main className="main">
         <Header

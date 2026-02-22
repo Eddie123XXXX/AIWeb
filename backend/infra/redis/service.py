@@ -67,3 +67,41 @@ async def keys(pattern: str = "*") -> list[str]:
         return await client.keys(pattern)
     finally:
         await client.aclose()
+
+
+# ---------- List 操作（聊天上下文热记忆）----------
+
+async def lrange(key: str, start: int, end: int) -> list[str]:
+    """LRANGE key start end，返回列表内元素（decode_responses 下为 str）。"""
+    client = await get_client()
+    try:
+        return await client.lrange(key, start, end)
+    finally:
+        await client.aclose()
+
+
+async def rpush(key: str, *values: str) -> int:
+    """RPUSH key v1 v2 ... 返回 push 后列表长度。"""
+    client = await get_client()
+    try:
+        return await client.rpush(key, *values)
+    finally:
+        await client.aclose()
+
+
+async def ltrim(key: str, start: int, end: int) -> None:
+    """LTRIM key start end，保留 [start, end] 区间。"""
+    client = await get_client()
+    try:
+        await client.ltrim(key, start, end)
+    finally:
+        await client.aclose()
+
+
+async def expire(key: str, seconds: int) -> bool:
+    """EXPIRE key seconds，设置过期时间。"""
+    client = await get_client()
+    try:
+        return await client.expire(key, seconds)
+    finally:
+        await client.aclose()

@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import logoImg from '../../img/Ling_Flowing_Logo.png';
+import logoImgDark from '../../img/Image.png';
 import { getStoredToken, setStoredToken, setStoredUser } from '../utils/auth';
 import { apiUrl } from '../utils/api';
+import { useTranslation } from '../context/LocaleContext';
+import { useTheme } from '../hooks/useTheme';
+import { LanguageDropdown } from '../components/LanguageDropdown';
 
 export { getStoredToken, setStoredToken } from '../utils/auth';
 
 export function Login({ onLoginSuccess }) {
+  const t = useTranslation();
+  const { toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +32,7 @@ export function Login({ onLoginSuccess }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const msg = Array.isArray(data.detail) ? data.detail[0]?.msg ?? data.detail[0] : data.detail;
-        setError(msg || '登录失败，请检查邮箱和密码');
+        setError(msg || t('loginFailed'));
         return;
       }
       const token = data.access_token;
@@ -36,10 +42,10 @@ export function Login({ onLoginSuccess }) {
         onLoginSuccess?.(token);
         navigate('/', { replace: true });
       } else {
-        setError('登录响应异常');
+        setError(t('loginResponseError'));
       }
     } catch (err) {
-      setError('网络错误，请稍后重试');
+      setError(t('networkError'));
     } finally {
       setLoading(false);
     }
@@ -47,18 +53,41 @@ export function Login({ onLoginSuccess }) {
 
   return (
     <div className="login-page">
+      <div className="login-page__top">
+        <LanguageDropdown placement="below">
+          <button
+            type="button"
+            className="login-page__lang-btn"
+            aria-label={t('language')}
+            title={t('language')}
+          >
+            <span className="material-symbols-outlined">language</span>
+          </button>
+        </LanguageDropdown>
+        <button
+          type="button"
+          className="login-page__theme-btn"
+          onClick={toggleTheme}
+          title={t('theme')}
+          aria-label={t('theme')}
+        >
+          <span className="material-symbols-outlined theme-icon-light">light_mode</span>
+          <span className="material-symbols-outlined theme-icon-dark" aria-hidden="true">dark_mode</span>
+        </button>
+      </div>
       <div className="login-container">
         <div className="login-brand">
           <div className="login-logo-wrap">
-            <img src={logoImg} alt="" className="login-logo-img" />
+            <img src={logoImg} alt="" className="login-logo-img logo-img--light" />
+            <img src={logoImgDark} alt="" className="login-logo-img logo-img--dark" />
           </div>
      
         </div>
 
         <div className="login-card">
           <div className="login-card-head">
-            <h2 className="login-card-title">登录</h2>
-            <p className="login-card-desc">欢迎回来，请输入您的账号信息。</p>
+            <h2 className="login-card-title">{t('login')}</h2>
+            <p className="login-card-desc">{t('loginCardDesc')}</p>
           </div>
 
           <form className="login-form" onSubmit={handleSubmit}>
@@ -69,13 +98,13 @@ export function Login({ onLoginSuccess }) {
             )}
             <div className="login-field">
               <label className="login-label" htmlFor="login-email">
-                邮箱地址
+                {t('email')}
               </label>
               <input
                 id="login-email"
                 type="email"
                 className="login-input"
-                placeholder="请输入邮箱"
+                placeholder={t('emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
@@ -84,7 +113,7 @@ export function Login({ onLoginSuccess }) {
             </div>
             <div className="login-field">
               <label className="login-label" htmlFor="login-password">
-                密码
+                {t('password')}
               </label>
               <input
                 id="login-password"
@@ -98,12 +127,12 @@ export function Login({ onLoginSuccess }) {
               />
             </div>
             <button type="submit" className="login-submit" disabled={loading}>
-              {loading ? '登录中…' : '登录'}
+              {loading ? t('loginSubmitting') : t('login')}
             </button>
           </form>
 
           <div className="login-divider">
-            <span className="login-divider-text">或使用以下方式登录</span>
+            <span className="login-divider-text">{t('loginDividerText')}</span>
           </div>
 
           <div className="login-social">
@@ -114,21 +143,21 @@ export function Login({ onLoginSuccess }) {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z" fill="#EA4335" />
               </svg>
-              使用 Google 登录
+              {t('loginWithGoogle')}
             </button>
             <button type="button" className="login-social-btn" disabled>
               <svg className="login-social-icon login-social-icon-wechat" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <path d="M8.36 11.23c-.45 0-.82-.35-.82-.79c0-.43.37-.78.82-.78c.45 0 .82.35.82.78c0 .44-.37.79-.82.79m4.84 0c-.45 0-.82-.35-.82-.79c0-.43.37-.78.82-.78s.82.35.82.78c0 .44-.37.79-.82.79M18.8 9.53c0-3.32-3.13-6.02-7-6.02C7.94 3.51 4.8 6.21 4.8 9.53c0 1.83.95 3.46 2.45 4.56l-.61 1.82l2.13-1.07c.4.11.81.16 1.23.16c.4 0 .78-.05 1.15-.12c-.11-.33-.17-.68-.17-1.05c0-2.48 2.37-4.49 5.3-4.49c.53 0 1.05.07 1.52.21m3.11 5.34c0-2.5-2.31-4.53-5.16-4.53c-2.85 0-5.16 2.03-5.16 4.53s2.31 4.53 5.16 4.53c.56 0 1.1-.08 1.6-.24l1.63.81l-.47-1.39c1.1-.81 1.8-2.03 1.8-3.41m-6.66 1.35c-.34 0-.61-.26-.61-.59c0-.33.27-.6.61-.6c.34 0 .61.27.61.6c0 .33-.27.59-.61.59m3.03 0c-.34 0-.61-.26-.61-.59c0-.33.27-.6.61-.6s.61.27.61.6c0 .33-.27.59-.61.59z" />
               </svg>
-              使用微信登录
+              {t('loginWithWechat')}
             </button>
           </div>
         </div>
 
         <p className="login-footer-text">
-          还没有账号？{' '}
+          {t('noAccountYet')}{' '}
           <Link className="login-link-bold" to="/register">
-            立即注册
+            {t('registerNow')}
           </Link>
         </p>
       </div>

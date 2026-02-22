@@ -117,6 +117,18 @@ class MessageRepository:
         finally:
             await conn.close()
 
+    async def count_by_conversation(self, conversation_id: str) -> int:
+        """某会话的消息条数。"""
+        conn = await _get_conn()
+        try:
+            row = await conn.fetchrow(
+                "SELECT count(*) AS c FROM messages WHERE conversation_id = $1",
+                conversation_id,
+            )
+            return row["c"] if row else 0
+        finally:
+            await conn.close()
+
     async def get_latest_n(
         self,
         conversation_id: str,

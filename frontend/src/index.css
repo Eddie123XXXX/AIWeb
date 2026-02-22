@@ -40,6 +40,22 @@
   --border-subtle: #27272a;
 }
 
+/* 浅色/深色主题 logo 切换时渐变（opacity 过渡） */
+.logo-img--light {
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+.logo-img--dark {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+[data-theme="dark"] .logo-img--light {
+  opacity: 0;
+}
+[data-theme="dark"] .logo-img--dark {
+  opacity: 1;
+}
+
 /* ========== 基础与排版 ========== */
 *,
 *::before,
@@ -120,6 +136,7 @@ details > summary {
 
 /* ========== 登录页（与全局主题统一） ========== */
 .login-page {
+  position: relative;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -131,6 +148,62 @@ details > summary {
   background-image: radial-gradient(var(--color-card-border) 0.8px, transparent 0.8px);
   background-size: 24px 24px;
   color: var(--color-charcoal);
+}
+
+.login-page__top {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.login-page__lang-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-charcoal-light);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.login-page__lang-btn:hover {
+  color: var(--color-charcoal);
+}
+
+.login-page__lang-btn .material-symbols-outlined {
+  font-size: 1.25rem;
+}
+
+.login-page__theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-charcoal-light);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.login-page__theme-btn:hover {
+  color: var(--color-charcoal);
+}
+
+.login-page__theme-btn .material-symbols-outlined {
+  font-size: 1.25rem;
 }
 
 .login-container {
@@ -147,7 +220,18 @@ details > summary {
 
 .login-logo-wrap {
   position: relative;
+  width: 4rem;
+  height: 4rem;
   margin-bottom: 1rem;
+}
+.login-logo-wrap .logo-img--light,
+.login-logo-wrap .logo-img--dark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .login-logo-img {
@@ -638,6 +722,21 @@ details > summary::-webkit-details-marker {
   gap: 0.75rem;
 }
 
+.profile-modal-head__logo-wrap {
+  position: relative;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+}
+.profile-modal-head__logo-wrap .profile-modal-head__logo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .profile-modal-head__logo {
   width: 2rem;
   height: 2rem;
@@ -752,13 +851,22 @@ details > summary::-webkit-details-marker {
 }
 
 .sidebar__logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
   flex-shrink: 0;
   text-decoration: none;
   border-radius: 0.5rem;
   transition: opacity 0.2s;
+}
+.sidebar__logo .sidebar__logo-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .sidebar__logo:hover {
@@ -814,7 +922,7 @@ details > summary::-webkit-details-marker {
   border: 1px solid var(--color-card-border);
   border-radius: 0.75rem;
   color: var(--color-charcoal);
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -849,11 +957,31 @@ details > summary::-webkit-details-marker {
   margin-bottom: 0.75rem;
 }
 
+.sidebar__recent-placeholder {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-charcoal-light);
+}
+
+.sidebar__recent-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border-radius: 0.5rem;
+  background: transparent;
+}
+
+.sidebar__recent-row:hover .sidebar__recent-action {
+  opacity: 1;
+}
+
 .sidebar__recent-btn {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 0.625rem 0.75rem;
   border: none;
   border-radius: 0.5rem;
@@ -881,17 +1009,192 @@ details > summary::-webkit-details-marker {
 .sidebar__recent-btn .material-symbols-outlined {
   flex-shrink: 0;
   font-size: 20px;
-  /* 固定图标列宽度，让所有文字从同一竖直线开始 */
   width: 1.5rem;
   text-align: center;
 }
 
-.sidebar__recent-btn span:last-child {
+.sidebar__recent-btn-text {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidebar__recent-action {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  margin: -0.25rem -0.25rem -0.25rem 0.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--color-charcoal-light);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s, background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar__recent-action:hover {
+  background: var(--hover-bg);
+  color: var(--color-charcoal);
+  opacity: 1;
+}
+
+.sidebar__recent-action .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.sidebar__recent-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  min-width: 10rem;
+  margin-top: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-card);
+}
+
+/* 与 .sidebar__user-menu-item（个人中心等）字体样式一致 */
+.sidebar__recent-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: none;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: var(--color-charcoal-light);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s, color 0.2s;
+}
+
+.sidebar__recent-menu-item:hover {
+  background: var(--hover-bg);
+  color: var(--color-charcoal);
+}
+
+.sidebar__recent-menu-item--danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.sidebar__recent-menu-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* 重命名 / 删除 弹层（复用样式） */
+.sidebar__rename-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.sidebar__rename-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.sidebar__rename-card {
+  position: relative;
+  width: 100%;
+  max-width: 20rem;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-card);
+}
+
+.sidebar__rename-title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-charcoal);
+}
+
+.sidebar__rename-desc {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: var(--color-charcoal-light);
+}
+
+.sidebar__rename-input {
+  width: 100%;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--color-input-border);
+  border-radius: 0.5rem;
+  background: var(--color-input-bg);
+  color: var(--color-charcoal);
+  box-sizing: border-box;
+}
+
+.sidebar__rename-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.sidebar__rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.sidebar__rename-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.sidebar__rename-btn--cancel {
+  background: var(--hover-bg);
+  color: var(--color-charcoal);
+}
+
+.sidebar__rename-btn--cancel:hover {
+  background: var(--hover-bg-strong);
+}
+
+.sidebar__rename-btn--confirm {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.sidebar__rename-btn--confirm:hover {
+  opacity: 0.9;
+}
+
+.sidebar__rename-btn--danger {
+  background: #ef4444;
+  color: #fff;
+}
+
+.sidebar__rename-btn--danger:hover {
+  opacity: 0.9;
 }
 
 .sidebar__bottom {
@@ -918,6 +1221,8 @@ details > summary::-webkit-details-marker {
   cursor: pointer;
   transition: all 0.2s;
   text-align: left;
+  white-space: nowrap;
+  min-height: 2.5rem;
 }
 
 .sidebar__nav-btn:hover {
@@ -1114,6 +1419,36 @@ a.sidebar__user-menu-item {
   opacity: 0.95;
 }
 
+/* 语言切换弹窗 */
+.language-modal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.language-modal-option {
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-card-border);
+  background: transparent;
+  color: var(--color-charcoal);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.language-modal-option:hover {
+  background: var(--hover-bg);
+}
+
+.language-modal-option--active {
+  border-color: var(--color-primary);
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--color-primary);
+}
+
 .sidebar__user-menu-icon {
   font-size: 18px;
   width: 1.5rem;
@@ -1201,6 +1536,40 @@ a.sidebar__user-menu-item {
   position: relative; /* 让下拉菜单相对于模型按钮定位 */
 }
 
+/* 模型提供商 logo：按钮内与下拉项左侧 */
+.provider-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--color-card-border);
+}
+.provider-logo__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.provider-logo__fallback {
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--color-charcoal-light);
+  line-height: 1;
+}
+.header__model-btn .header__model-logo,
+.header__model-logo.provider-logo {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.75rem;
+}
+.header__model-menu-item .header__model-menu-logo,
+.header__model-menu-logo.provider-logo {
+  width: 1.25rem;
+  height: 1.25rem;
+  font-size: 0.65rem;
+}
+
 .header__model-btn {
   display: inline-flex;
   align-items: center;
@@ -1212,11 +1581,13 @@ a.sidebar__user-menu-item {
   /* 按钮底色与整体页面背景保持一致（亮/暗模式自动适配） */
   background: var(--color-background-main);
   color: var(--color-charcoal);
-  font-size: 1.125rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 1rem;
+  font-weight: 400;
+  font-family: inherit;
+  letter-spacing: normal;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
   /* 去掉卡片阴影，避免与背景产生色差感 */
   box-shadow: none;
 }
@@ -1226,20 +1597,18 @@ a.sidebar__user-menu-item {
 }
 
 .header__model-btn .gradient-text {
-  /* 取消渐变高亮效果，让“DeepSeek”文字颜色与按钮内其它文字一致 */
+  /* 与主体文字一致：取消渐变，使用正文颜色与字重 */
   background: none;
   -webkit-background-clip: initial;
   background-clip: initial;
   -webkit-text-fill-color: currentColor;
   color: inherit;
-  /* 按钮整体仍是 700，单独把文字设为不加粗 */
-  font-weight: 400;
+  font-weight: inherit;
 }
 
-/* 头部模型选择下拉菜单 */
+/* 头部模型选择下拉菜单（与页面正文字体格式统一） */
 .header__model-menu {
   position: absolute;
-  /* 挨着按钮右侧显示，并与按钮“上边界”对齐 */
   top: 0;
   left: 100%;
   transform: none;
@@ -1253,7 +1622,12 @@ a.sidebar__user-menu-item {
   flex-direction: column;
   gap: 0.25rem;
   z-index: 40;
-  min-width: 11rem;      /* 比按钮略宽一些 */
+  min-width: 11rem;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--color-charcoal);
 }
 
 .header__model-menu-item {
@@ -1265,12 +1639,23 @@ a.sidebar__user-menu-item {
   border-radius: 0.6rem;
   border: none;
   background: transparent;
-  color: var(--color-charcoal-light);
-  font-size: 0.85rem;
-  font-weight: 500;
+  color: var(--color-charcoal);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: normal;
   cursor: pointer;
   text-align: left;
   transition: background-color 0.2s, color 0.2s;
+  white-space: nowrap;
+  min-height: 2.25rem;
+}
+
+.header__model-menu-item span:last-child {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 .header__model-menu-item:hover {
@@ -1300,10 +1685,39 @@ a.sidebar__user-menu-item {
 
 .header__apps-menu .header__model-menu-item {
   text-decoration: none;
-  color: inherit;
+  color: var(--color-charcoal);
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.header__apps-menu .header__model-menu-item:hover {
+  color: var(--color-charcoal);
+}
+
+.header__apps-menu .header__model-menu-item--active {
+  color: var(--color-primary);
+}
+
+/* 语言下拉：仅文字，与用户下拉菜单（个人中心等）字号、字重一致 */
+.language-dropdown .language-dropdown__item {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-charcoal-light);
+  font-family: inherit;
+}
+
+.language-dropdown .language-dropdown__item:hover {
+  background: var(--hover-bg);
+  color: var(--color-charcoal);
+}
+
+.language-dropdown .language-dropdown__item.header__model-menu-item--active {
+  color: var(--color-primary);
 }
 
 .header__model-menu-emoji {
@@ -1336,17 +1750,15 @@ a.sidebar__user-menu-item {
   min-height: 2.5rem;
   padding: 0;
   border-radius: 50%;
-  border: 1px solid var(--color-card-border);
-  background: var(--color-card-bg);
+  border: none;
+  background: transparent;
   color: var(--color-charcoal-light);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s;
 }
 
 .header__icon-btn:hover {
   color: var(--color-primary);
-  border-color: rgba(59, 130, 246, 0.4);
-  box-shadow: var(--shadow-card);
 }
 
 .header__icon-btn .material-symbols-outlined {
@@ -1420,6 +1832,11 @@ a.sidebar__user-menu-item {
   gap: 2rem;
 }
 
+/* 有对话时放宽宽度，让代码块和长文有更多横向空间 */
+.welcome--has-chat .welcome__inner {
+  max-width: min(56rem, 96%);
+}
+
 /* 让欢迎文案与初始输入框左右边界对齐 */
 .welcome .input-area {
   padding-left: 0;
@@ -1444,6 +1861,21 @@ a.sidebar__user-menu-item {
   margin: 0;
 }
 
+.welcome__title-logo-wrap {
+  position: relative;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+}
+.welcome__title-logo-wrap .welcome__title-logo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .welcome__title-logo {
   width: 2.5rem;
   height: 2.5rem;
@@ -1453,6 +1885,8 @@ a.sidebar__user-menu-item {
 
 .welcome__greeting {
   color: #7dd3fc;
+  line-height: 1.3;
+  font-family: inherit;
 }
 
 [data-theme="dark"] .welcome__greeting {
@@ -1464,6 +1898,11 @@ a.sidebar__user-menu-item {
     font-size: 3.75rem;
   }
 
+  .welcome__title-logo-wrap {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+
   .welcome__title-logo {
     width: 3.5rem;
     height: 3.5rem;
@@ -1473,8 +1912,10 @@ a.sidebar__user-menu-item {
 .welcome__subtitle {
   font-size: 1.5rem;
   font-weight: 500;
+  line-height: 1.4;
   color: var(--color-charcoal-light);
   margin: 0;
+  font-family: inherit;
 }
 
 @media (min-width: 768px) {
@@ -1506,17 +1947,31 @@ a.sidebar__user-menu-item {
   box-shadow: var(--shadow-card);
   white-space: pre-wrap;
   word-wrap: break-word;
+  box-sizing: border-box;
 }
 
 .chat__message--user {
   margin-left: auto;
-  background: linear-gradient(135deg, var(--color-primary), #6366f1);
-  color: #fff;
+  width: max-content;
+  max-width: 100%;
   border-bottom-right-radius: 0.2rem;
+}
+
+[data-theme="light"] .chat__message--user {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--color-charcoal);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+[data-theme="dark"] .chat__message--user {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--color-charcoal);
+  border: 1px solid rgba(59, 130, 246, 0.25);
 }
 
 .chat__message--assistant {
   margin-right: auto;
+  width: 100%;
   max-width: 100%;
   /* 与 .chat__message 保持一致的内边距，让纯文本与 Markdown 视觉对齐 */
   padding: 0.6rem 0.9rem;
@@ -1542,9 +1997,15 @@ a.sidebar__user-menu-item {
   border-radius: 0.75rem;
   overflow: auto;
   position: relative;
-  /* 让代码块占满整个助手气泡的可用宽度，看起来不“少半截” */
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
+}
+
+.chat__message--assistant pre code {
+  display: block;
+  min-width: min-content;
+  white-space: pre;
 }
 
 .chat__message--assistant code {
@@ -1859,15 +2320,14 @@ a.sidebar__user-menu-item {
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: var(--color-primary);
-  color: white;
+  background: transparent;
+  color: var(--color-primary);
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 14px -2px rgba(59, 130, 246, 0.4);
+  transition: color 0.2s;
 }
 
 .input-box__send:hover:not(:disabled) {
-  background: #2563eb;
+  color: #2563eb;
 }
 
 .input-box__send:disabled {
@@ -2089,8 +2549,8 @@ a.sidebar__user-menu-item {
 
 .rag-sidebar__sources-title {
   padding: 0 0.75rem;
-  /* 与主界面 sidebar__recent-title 对齐 */
-  font-size: 0.75rem;
+  /* 与主界面 sidebar__recent-title 对齐，中英文统一字号 */
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--color-charcoal-light);
   text-transform: uppercase;
@@ -2176,12 +2636,22 @@ a.sidebar__user-menu-item {
 }
 
 .rag-header__logo {
-  display: flex;
-  align-items: center;
+  position: relative;
+  display: block;
+  width: 2rem;
+  height: 2rem;
   flex-shrink: 0;
   text-decoration: none;
   border-radius: 0.5rem;
   transition: opacity 0.2s;
+}
+.rag-header__logo .rag-header__logo-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .rag-header__logo:hover {
@@ -2460,13 +2930,12 @@ a.sidebar__user-menu-item {
   height: 2.5rem;
   border: none;
   border-radius: 50%;
-  background: var(--color-primary);
-  color: white;
+  background: transparent;
+  color: var(--color-primary);
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 14px -2px rgba(59, 130, 246, 0.4);
+  transition: color 0.2s;
 }
 
 .rag-input-box__send:hover {
-  filter: brightness(1.1);
+  color: #2563eb;
 }

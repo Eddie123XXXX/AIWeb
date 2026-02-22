@@ -13,7 +13,12 @@ function getWsUrl() {
   return url;
 }
 
-export function useChat() {
+/**
+ * @param {string | null} conversationId - 当前会话 ID，有则后端走 Redis/DB 读路径与写路径
+ * @param {{ onRoundComplete?: (conversationId: string) => void }} options - 本轮对话结束（done）时回调，用于刷新侧栏标题等
+ */
+export function useChat(conversationId = null, options = {}) {
+  const { onRoundComplete } = options;
   const [messages, setMessages] = useState([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -21,6 +26,8 @@ export function useChat() {
   const wsRef = useRef(null);
   const wsReadyRef = useRef(null);
   const streamingBufferRef = useRef('');
+  const onRoundCompleteRef = useRef(onRoundComplete);
+  onRoundCompleteRef.current = onRoundComplete;
 
   const ensureWebSocket = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -66,6 +73,9 @@ export function useChat() {
             setMessages((prev) => [...prev, { role: 'assistant', content }]);
           }
           setIsStreaming(false);
+          if (data.conversation_id && onRoundCompleteRef.current) {
+            onRoundCompleteRef.current(data.conversation_id);
+          }
         }
       } catch (e) {
         console.error(e);
@@ -94,22 +104,22 @@ export function useChat() {
           throw new Error('WebSocket 未连接');
         }
         const nextMessages = [...messages, userMessage];
-        ws.send(
-          JSON.stringify({
-            model_id: modelId || DEFAULT_MODEL_ID,
-            messages: nextMessages,
-            stream: true,
-            temperature: 0.7,
-            max_tokens: 1024,
-          })
-        );
+        const payload = {
+          model_id: modelId || DEFAULT_MODEL_ID,
+          messages: nextMessages,
+          stream: true,
+          temperature: 0.7,
+          max_tokens: 1024,
+        };
+        if (conversationId) payload.conversation_id = conversationId;
+        ws.send(JSON.stringify(payload));
       } catch (err) {
         console.error(err);
         setMessages((prev) => [...prev, { role: 'assistant', content: '错误：' + err.message }]);
         setIsStreaming(false);
       }
     },
-    [messages, isStreaming, ensureWebSocket]
+    [messages, isStreaming, ensureWebSocket, conversationId]
   );
 
   const cancelStream = useCallback(() => {
@@ -130,6 +140,7 @@ export function useChat() {
 
   return {
     messages,
+    setMessages,
     streamingContent,
     isStreaming,
     error,

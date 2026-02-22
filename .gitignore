@@ -8,9 +8,18 @@ env/
 venv/
 .venv/
 
-# Environment
+# Environment / 隐私与密钥（勿提交；.env.example 可提交）
 .env
 .env.local
+.env.*.local
+backend/.env
+frontend/.env
+infra/.env
+# 密钥文件
+*.pem
+*.key
+**/credentials.json
+**/secrets.json
 
 # IDE
 .vscode/

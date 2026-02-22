@@ -1,13 +1,63 @@
 """
 聊天路由：发送消息、OpenAI 兼容接口、WebSocket 对话
+读取路径：Redis 热记忆 → 未命中回源 DB；写路径：先落库再更新 Redis 并滑动窗口截断。
 """
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
-from models import ChatRequest, ChatResponse
-from services.llm_service import LLMService, generate_sse_stream
+
+from models import ChatRequest, ChatResponse, Message, Role
+from db.conversation_repository import conversation_repository
+from services.chat_context import get_context, persist_round
+from services.llm_service import (
+    LLMService,
+    generate_sse_stream,
+    generate_sse_stream_with_persist,
+)
 from routers.models import get_model_config_by_id
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+# 仅将上下文里允许的角色加入 prompt，避免 Role 枚举报错
+_ALLOWED_ROLES = {r.value for r in Role}
+
+
+def _build_messages_for_llm(request: ChatRequest, context: list[dict]) -> list[Message]:
+    """
+    拼装：[System Prompt] + [Redis/DB 取出的历史] + [最新用户输入]。
+    context 为 get_context 返回的 list[{"role","content"}]；最新用户输入为 request.messages 的最后一条。
+    """
+    if not request.messages:
+        return []
+    messages: list[Message] = []
+    # 会话级 system_prompt 在调用方注入，这里只拼历史 + 最后一条
+    for m in context:
+        if m.get("role") in _ALLOWED_ROLES:
+            messages.append(Message(role=Role(m["role"]), content=m.get("content") or ""))
+    # 最后一条必须是本轮用户输入
+    last = request.messages[-1]
+    messages.append(Message(role=Role(last.role.value), content=last.content))
+    return messages
+
+
+async def _resolve_conversation_and_messages(request: ChatRequest) -> tuple[str | None, list[Message]]:
+    """
+    若带 conversation_id：校验会话存在，取 Redis/DB 上下文，拼装成发给 LLM 的 messages。
+    返回 (conversation_id 或 None, messages)。
+    """
+    if not request.conversation_id:
+        return None, list(request.messages)
+
+    conv = await conversation_repository.get_by_id(request.conversation_id)
+    if not conv:
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    context = await get_context(request.conversation_id)
+    messages: list[Message] = []
+    if conv.get("system_prompt"):
+        messages.append(Message(role=Role.SYSTEM, content=conv["system_prompt"]))
+    rest = _build_messages_for_llm(request, context)
+    messages.extend(rest)
+    return request.conversation_id, messages
 
 
 @router.post("", summary="发送聊天消息")
@@ -15,9 +65,9 @@ async def chat(request: ChatRequest):
     """
     发送聊天消息。
 
-    - **流式**：`stream=true` 时使用 SSE (Server-Sent Events) 返回
-    - **非流式**：`stream=false` 时一次性返回完整回复
-    - **conversation_id**：可选，用于关联历史会话，便于前端展示或调用历史接口保存
+    - **流式**：`stream=true` 时使用 SSE 返回；带 conversation_id 时结束后自动落库并更新 Redis。
+    - **非流式**：`stream=false` 时一次性返回；带 conversation_id 时落库并更新 Redis。
+    - **conversation_id**：可选；有则先读 Redis/DB 上下文再拼 prompt，回复后双写 DB + Redis。
     """
     try:
         model_config = get_model_config_by_id(request.model_id)
@@ -27,13 +77,36 @@ async def chat(request: ChatRequest):
             detail=f"模型配置 '{request.model_id}' 不存在，请先添加模型配置",
         )
 
+    conversation_id, messages_for_llm = await _resolve_conversation_and_messages(request)
+    if not messages_for_llm:
+        raise HTTPException(status_code=400, detail="消息不能为空")
+
     llm_service = LLMService(model_config)
+    user_content = request.messages[-1].content if request.messages else ""
 
     if request.stream:
+        if conversation_id:
+            return StreamingResponse(
+                generate_sse_stream_with_persist(
+                    llm_service,
+                    messages_for_llm,
+                    conversation_id=conversation_id,
+                    user_content=user_content,
+                    temperature=request.temperature,
+                    max_tokens=request.max_tokens,
+                    model_id=request.model_id or "default",
+                ),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
         return StreamingResponse(
             generate_sse_stream(
                 llm_service,
-                request.messages,
+                messages_for_llm,
                 request.temperature,
                 request.max_tokens,
             ),
@@ -45,12 +118,18 @@ async def chat(request: ChatRequest):
             },
         )
 
+    # 非流式
     try:
         content = await llm_service.chat(
-            request.messages,
+            messages_for_llm,
             request.temperature,
             request.max_tokens,
         )
+        if conversation_id:
+            await persist_round(
+                conversation_id, user_content, content,
+                model_id=request.model_id or "default",
+            )
         return ChatResponse(
             content=content,
             model=model_config.model_name,
@@ -62,29 +141,20 @@ async def chat(request: ChatRequest):
 
 @router.post("/completions", summary="OpenAI 兼容接口")
 async def chat_completions(request: ChatRequest):
-    """
-    OpenAI 兼容的 chat completions 接口，便于前端使用现有 OpenAI SDK。
-    请求/响应格式与 POST /api/chat 一致。
-    """
+    """OpenAI 兼容的 chat completions，逻辑同 POST /api/chat。"""
     return await chat(request)
 
 
 @router.websocket("/ws")
 async def websocket_chat(websocket: WebSocket):
     """
-    WebSocket 聊天接口。
-
-    - 连接：`ws://HOST/api/chat/ws`
-    - 发送：JSON，格式同 `ChatRequest`（含 model_id、messages、stream 等）
-    - 响应：每条消息 `{"content": "...", "done": false}`，结束为 `{"content": "", "done": true}`，错误为 `{"error": "...", "done": true}`
+    WebSocket 聊天接口。带 conversation_id 时：读 Redis/DB 上下文拼 prompt，结束后双写 DB + Redis。
     """
     await websocket.accept()
 
     try:
         while True:
             data = await websocket.receive_json()
-
-            # 解析请求体
             try:
                 request = ChatRequest(**data)
             except Exception as e:
@@ -93,27 +163,41 @@ async def websocket_chat(websocket: WebSocket):
                 )
                 continue
 
-            # 获取模型配置
             try:
                 model_config = get_model_config_by_id(request.model_id)
             except HTTPException as e:
                 await websocket.send_json({"error": e.detail, "done": True})
                 continue
 
+            try:
+                conversation_id, messages_for_llm = await _resolve_conversation_and_messages(request)
+            except HTTPException as e:
+                await websocket.send_json({"error": e.detail, "done": True})
+                continue
+
+            if not messages_for_llm:
+                await websocket.send_json({"error": "消息不能为空", "done": True})
+                continue
+
+            user_content = request.messages[-1].content if request.messages else ""
             llm_service = LLMService(model_config)
 
-            # 流式 / 非流式返回
             if request.stream:
+                accumulated = []
                 try:
                     async for content in llm_service.chat_stream(
-                        request.messages,
+                        messages_for_llm,
                         request.temperature,
                         request.max_tokens,
                     ):
-                        await websocket.send_json(
-                            {"content": content, "done": False}
+                        accumulated.append(content)
+                        await websocket.send_json({"content": content, "done": False})
+                    full_reply = "".join(accumulated)
+                    if conversation_id:
+                        await persist_round(
+                            conversation_id, user_content, full_reply,
+                            model_id=request.model_id or "default",
                         )
-
                     await websocket.send_json(
                         {"content": "", "done": True, "conversation_id": request.conversation_id}
                     )
@@ -124,10 +208,15 @@ async def websocket_chat(websocket: WebSocket):
             else:
                 try:
                     content = await llm_service.chat(
-                        request.messages,
+                        messages_for_llm,
                         request.temperature,
                         request.max_tokens,
                     )
+                    if conversation_id:
+                        await persist_round(
+                            conversation_id, user_content, content,
+                            model_id=request.model_id or "default",
+                        )
                     await websocket.send_json(
                         {"content": content, "done": True, "conversation_id": request.conversation_id}
                     )
@@ -137,5 +226,4 @@ async def websocket_chat(websocket: WebSocket):
                     )
 
     except WebSocketDisconnect:
-        # 客户端关闭连接时静默退出循环
         return

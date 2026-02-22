@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getAuthHeaders, getStoredUser, setStoredUser } from '../utils/auth';
 import { apiUrl } from '../utils/api';
 import logoImg from '../../img/Ling_Flowing_Logo.png';
+import logoImgDark from '../../img/Image.png';
 
 const GENDER_OPTIONS = [
   { value: 0, label: '保密' },
@@ -218,7 +219,10 @@ export function Profile({ onClose }) {
       {onClose && (
         <div className="profile-modal-head">
           <div className="profile-modal-head__left">
-            <img src={logoImg} alt="" className="profile-modal-head__logo" />
+            <div className="profile-modal-head__logo-wrap">
+              <img src={logoImg} alt="" className="profile-modal-head__logo logo-img--light" />
+              <img src={logoImgDark} alt="" className="profile-modal-head__logo logo-img--dark" />
+            </div>
             <h2 id="profile-modal-title" className="profile-modal-title">个人中心</h2>
           </div>
           <button

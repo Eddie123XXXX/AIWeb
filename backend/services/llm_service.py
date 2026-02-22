@@ -87,3 +87,33 @@ async def generate_sse_stream(
     except Exception as e:
         error_data = json.dumps({"error": str(e), "done": True}, ensure_ascii=False)
         yield f"data: {error_data}\n\n"
+
+
+async def generate_sse_stream_with_persist(
+    llm_service: LLMService,
+    messages: List[Message],
+    conversation_id: str,
+    user_content: str,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+    model_id: str = "default",
+) -> AsyncGenerator[str, None]:
+    """
+    流式响应 + 结束后写路径：先落库再更新 Redis，不打断数据流。
+    user_content 为本轮用户输入，用于 persist_round；model_id 用于首轮对话后生成标题。
+    """
+    from services.chat_context import persist_round
+
+    accumulated = []
+    try:
+        async for content in llm_service.chat_stream(messages, temperature, max_tokens):
+            accumulated.append(content)
+            data = json.dumps({"content": content, "done": False}, ensure_ascii=False)
+            yield f"data: {data}\n\n"
+
+        full_reply = "".join(accumulated)
+        await persist_round(conversation_id, user_content, full_reply, model_id=model_id)
+        yield f"data: {json.dumps({'content': '', 'done': True})}\n\n"
+    except Exception as e:
+        error_data = json.dumps({"error": str(e), "done": True}, ensure_ascii=False)
+        yield f"data: {error_data}\n\n"
