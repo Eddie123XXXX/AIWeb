@@ -126,7 +126,8 @@ export function App() {
   }, [token, loadConversations, setToken]);
 
   const handleRoundComplete = useCallback(
-    () => {
+    (completedConversationId) => {
+      if (completedConversationId) setConversationId(completedConversationId);
       // 首轮结束后后端会异步生成标题，延迟刷新侧栏列表以显示新标题
       setTimeout(() => loadConversations(() => setToken(null)), 2500);
     },
@@ -153,25 +154,34 @@ export function App() {
     setSidebarOpen((prev) => !prev);
   }, []);
 
-  const handleNewChat = useCallback(async () => {
-    setSidebarOpen(false);
-    try {
+  const createConversation = useCallback(
+    async (title = '新对话', modelId = null) => {
+      const body = { title };
+      if (modelId) body.model_id = modelId;
       const resp = await fetch(apiUrl('/api/history/conversations'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ title: '新对话' }),
+        body: JSON.stringify(body),
       });
-      if (!resp.ok) return;
-      const conv = await resp.json();
+      if (!resp.ok) return null;
+      return resp.json();
+    },
+    []
+  );
+
+  const handleNewChat = useCallback(async () => {
+    setSidebarOpen(false);
+    try {
+      const conv = await createConversation('新对话', modelId);
+      if (!conv) return;
       setConversationId(conv.id);
       setMessages([]);
       setConversations((prev) => [{ ...conv, title: conv.title || '新对话' }, ...prev]);
     } catch {
-      // 未登录或网络错误时仅清空当前视图
       setConversationId(null);
       setMessages([]);
     }
-  }, [setMessages]);
+  }, [setMessages, createConversation, modelId]);
 
   const handleSelectConversation = useCallback(async (id) => {
     setSidebarOpen(false);
@@ -231,10 +241,20 @@ export function App() {
   );
 
   const handleSendWithModel = useCallback(
-    (text) => {
+    async (text) => {
+      let cid = conversationId;
+      if (!cid) {
+        const conv = await createConversation('新对话', modelId);
+        if (conv) {
+          cid = conv.id;
+          setConversationId(cid);
+          setConversations((prev) => [{ ...conv, title: conv.title || '新对话' }, ...prev]);
+        }
+        return sendMessage(text, modelId, cid ?? undefined);
+      }
       return sendMessage(text, modelId);
     },
-    [sendMessage, modelId]
+    [sendMessage, modelId, conversationId, createConversation]
   );
 
   // 切换模型时，同时支持“设为默认”持久化到 localStorage，并更新默认模型 ID

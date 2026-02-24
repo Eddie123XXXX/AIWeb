@@ -33,6 +33,42 @@ class LLMService:
             base_url=api_base
         )
     
+    def _completion_kwargs(
+        self,
+        temperature: Optional[float],
+        max_tokens: Optional[int],
+    ) -> dict:
+        """构建 chat.completions.create 的公共参数。OpenAI 新模型要求用 max_completion_tokens，旧版 SDK 仅支持 max_tokens。"""
+        n = max_tokens or self.config.max_tokens
+        t = temperature if temperature is not None else self.config.temperature
+        kwargs = {"temperature": t}
+        if self.config.provider == "openai":
+            # 新 API 要求 max_completion_tokens；旧版 openai SDK 只认 max_tokens，用 extra_body 透传
+            kwargs["max_completion_tokens"] = n
+        else:
+            kwargs["max_tokens"] = n
+        return kwargs
+
+    async def _create_completion(self, messages: list, stream: bool, extra: dict):
+        """发起 create 调用。OpenAI 新模型需 max_completion_tokens；旧版 SDK 用 extra_body 透传。"""
+        base = {
+            "model": self.config.model_name,
+            "messages": messages,
+            "stream": stream,
+        }
+        if self.config.provider == "openai" and "max_completion_tokens" in extra:
+            n = extra.pop("max_completion_tokens")
+            base["max_completion_tokens"] = n
+            try:
+                return await self.client.chat.completions.create(**base, **extra)
+            except TypeError:
+                # 旧版 openai SDK 不支持 max_completion_tokens 参数，用 extra_body 传给 API
+                base.pop("max_completion_tokens", None)
+                return await self.client.chat.completions.create(
+                    **base, **extra, extra_body={"max_completion_tokens": n}
+                )
+        return await self.client.chat.completions.create(**base, **extra)
+
     async def chat(
         self,
         messages: List[Message],
@@ -40,15 +76,11 @@ class LLMService:
         max_tokens: Optional[int] = None
     ) -> str:
         """非流式对话"""
-        response = await self.client.chat.completions.create(
-            model=self.config.model_name,
-            messages=[{"role": m.role.value, "content": m.content} for m in messages],
-            temperature=temperature or self.config.temperature,
-            max_tokens=max_tokens or self.config.max_tokens,
-            stream=False
-        )
+        extra = self._completion_kwargs(temperature, max_tokens)
+        msg = [{"role": m.role.value, "content": m.content} for m in messages]
+        response = await self._create_completion(msg, stream=False, extra=extra)
         return response.choices[0].message.content
-    
+
     async def chat_stream(
         self,
         messages: List[Message],
@@ -56,13 +88,9 @@ class LLMService:
         max_tokens: Optional[int] = None
     ) -> AsyncGenerator[str, None]:
         """流式对话"""
-        response = await self.client.chat.completions.create(
-            model=self.config.model_name,
-            messages=[{"role": m.role.value, "content": m.content} for m in messages],
-            temperature=temperature or self.config.temperature,
-            max_tokens=max_tokens or self.config.max_tokens,
-            stream=True
-        )
+        extra = self._completion_kwargs(temperature, max_tokens)
+        msg = [{"role": m.role.value, "content": m.content} for m in messages]
+        response = await self._create_completion(msg, stream=True, extra=extra)
         
         async for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content:

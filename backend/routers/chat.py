@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from models import ChatRequest, ChatResponse, Message, Role
 from db.conversation_repository import conversation_repository
-from services.chat_context import get_context, persist_round
+from services.chat_context import get_context, get_memory_context_for_prompt, persist_round
 from services.llm_service import (
     LLMService,
     generate_sse_stream,
@@ -41,7 +41,7 @@ def _build_messages_for_llm(request: ChatRequest, context: list[dict]) -> list[M
 
 async def _resolve_conversation_and_messages(request: ChatRequest) -> tuple[str | None, list[Message]]:
     """
-    若带 conversation_id：校验会话存在，取 Redis/DB 上下文，拼装成发给 LLM 的 messages。
+    若带 conversation_id：校验会话存在，取 Redis/DB 上下文，召回长期记忆，拼装成发给 LLM 的 messages。
     返回 (conversation_id 或 None, messages)。
     """
     if not request.conversation_id:
@@ -52,9 +52,24 @@ async def _resolve_conversation_and_messages(request: ChatRequest) -> tuple[str 
         raise HTTPException(status_code=404, detail="会话不存在")
 
     context = await get_context(request.conversation_id)
-    messages: list[Message] = []
+    user_content = request.messages[-1].content if request.messages else ""
+
+    # 召回长期记忆并拼入 system
+    system_parts: list[str] = []
+    if conv.get("user_id") and user_content:
+        memory_block = await get_memory_context_for_prompt(
+            user_id=int(conv["user_id"]),
+            conversation_id=request.conversation_id,
+            query=user_content,
+        )
+        if memory_block:
+            system_parts.append("【长期记忆】\n" + memory_block)
     if conv.get("system_prompt"):
-        messages.append(Message(role=Role.SYSTEM, content=conv["system_prompt"]))
+        system_parts.append(conv["system_prompt"])
+
+    messages: list[Message] = []
+    if system_parts:
+        messages.append(Message(role=Role.SYSTEM, content="\n\n".join(system_parts)))
     rest = _build_messages_for_llm(request, context)
     messages.extend(rest)
     return request.conversation_id, messages

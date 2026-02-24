@@ -25,6 +25,9 @@ cd backend
 pip install -r requirements.txt
 ```
 
+# 使用venv环境命令行
+.\.venv\Scripts\Activate.ps1
+
 ### 2. 启动服务
 
 **Windows 推荐不用 `--reload`**（否则 uvicorn 父子进程可能导致请求到不了应用，出现 404/无响应、终端无日志）：
@@ -32,6 +35,7 @@ pip install -r requirements.txt
 ```bash
 python main.py
 # 或
+
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
@@ -58,12 +62,12 @@ POST /api/models
 Content-Type: application/json
 
 {
-  "id": "gpt4",
-  "name": "GPT-4",
+  "id": "openai-default",
+  "name": "OpenAI GPT-4o",
   "provider": "openai",
-  "model_name": "gpt-4",
+  "model_name": "gpt-4o",
   "api_key": "sk-xxx",
-  "max_tokens": 4096,
+  "max_tokens": 16384,
   "temperature": 0.7
 }
 ```
@@ -228,6 +232,17 @@ backend/
 └── services/
     ├── __init__.py
     └── llm_service.py   # LLM 服务封装
+```
+
+## 测试脚本
+
+```bash
+cd backend
+# 对话数据流测试（验证：上下文、记忆召回、落库、异步记忆写入）
+python -m test_chat_flow
+
+# 记忆模块全功能测试
+python -m memory.test_memory_full
 ```
 
 ## 后续规划

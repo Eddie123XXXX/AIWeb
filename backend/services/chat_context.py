@@ -1,6 +1,7 @@
 """
 聊天上下文服务：读取路径（Redis 热记忆 + 未命中回源 DB）、写入路径（双写 DB + Redis 并滑动窗口截断）。
 首轮对话结束后异步调用 LLM 生成会话标题并更新。
+记忆模块：对话结束后异步写入长期记忆；拼 prompt 前召回相关记忆注入 system。
 """
 import asyncio
 import json
@@ -10,6 +11,12 @@ from typing import Any
 from db.conversation_repository import conversation_repository
 from db.message_repository import message_repository
 from infra.redis import service as redis_service
+from memory import (
+    compress_memories,
+    extract_and_store_memories_for_round,
+    retrieve_relevant_memories,
+)
+from memory.router import get_intent_domains
 
 logger = logging.getLogger(__name__)
 TITLE_MAX_CHARS = 28  # 侧栏显示用，约 20 字内
@@ -67,6 +74,52 @@ async def get_context(conversation_id: str, limit: int = CONTEXT_WINDOW_SIZE) ->
             pass
 
     return out
+
+
+async def get_memory_context_for_prompt(
+    user_id: int,
+    conversation_id: str,
+    query: str,
+    *,
+    top_k_final: int = 5,
+    compress_threshold: int = 5,
+    max_chars: int = 500,
+) -> str:
+    """
+    召回与当前查询相关的长期记忆，用于拼入 system prompt。
+    若召回条数 > compress_threshold，则压缩为摘要以节省 token。
+    失败时返回空字符串，不阻塞聊天。
+    """
+    if not query or not query.strip():
+        return ""
+    # 1. 意图路由：判断目标领域
+    target_domains = await get_intent_domains(query.strip())
+    # 2. 纯闲聊不检索记忆
+    if target_domains == ["general_chat"] or not target_domains:
+        return ""
+
+    logging.getLogger("memory").info(
+        "[Memory] 聊天拼 prompt 召回记忆 get_memory_context_for_prompt | user_id=%s conv=%s domains=%s",
+        user_id,
+        conversation_id[:8] if conversation_id else "-",
+        target_domains,
+    )
+    try:
+        memories = await retrieve_relevant_memories(
+            user_id=user_id,
+            query=query.strip(),
+            conversation_id=conversation_id,
+            target_domains=target_domains,
+            top_k_final=top_k_final,
+        )
+        if not memories:
+            return ""
+        if len(memories) > compress_threshold:
+            return await compress_memories(memories, max_chars=max_chars)
+        return "\n".join(m.get("content", "").strip() for m in memories if m.get("content"))
+    except Exception as e:
+        logger.warning("召回长期记忆失败（忽略，不影响聊天）: %s", e)
+        return ""
 
 
 async def append_messages_and_trim(
@@ -165,3 +218,24 @@ async def persist_round(
     n = await message_repository.count_by_conversation(conversation_id)
     if n == 2:
         asyncio.create_task(_generate_and_set_title(conversation_id, model_id or "default"))
+
+    # 异步写入长期记忆（不阻塞前端，后台执行）
+    try:
+        conv = await conversation_repository.get_by_id(conversation_id)
+        if conv and conv.get("user_id"):
+            user_id = int(conv["user_id"])
+            logging.getLogger("memory").info(
+                "[Memory] 聊天对话结束后异步写入长期记忆 | user_id=%s conv=%s",
+                user_id,
+                conversation_id[:8] if conversation_id else "-",
+            )
+            asyncio.create_task(
+                extract_and_store_memories_for_round(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_content=user_content,
+                    assistant_content=assistant_content,
+                )
+            )
+    except Exception as e:
+        logger.warning("写入长期记忆失败（忽略错误，不影响主流程）: %s", e)

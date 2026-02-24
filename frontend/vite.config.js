@@ -8,6 +8,7 @@ export default defineConfig({
     outDir: 'dist/build',
   },
   server: {
+    host: '0.0.0.0',  // 允许局域网设备访问
     port: 5173,
     proxy: {
       '/api': {

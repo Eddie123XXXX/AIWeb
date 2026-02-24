@@ -2,8 +2,19 @@
 AI 聊天平台后端
 基于 FastAPI 构建的多模型 LLM 聊天服务
 """
+import logging
+import sys
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
+
+# 配置记忆模块日志，确保 [Memory] 输出到终端
+_mem_log = logging.getLogger("memory")
+_mem_log.setLevel(logging.INFO)
+if not _mem_log.handlers:
+    _h = logging.StreamHandler(sys.stdout)
+    _h.setFormatter(logging.Formatter("%(message)s"))
+    _mem_log.addHandler(_h)
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -35,8 +46,13 @@ except Exception as e:
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     print("🚀 AI 聊天平台启动中...")
-    # 打印已注册的路由，便于确认 /api/user/register、/api/models 等是否存在
-    
+    # 预加载记忆模块，确保启动时打印模块就绪
+    try:
+        import memory  # noqa: F401
+        print("[Memory] 记忆模块已就绪（extract/store, retrieve, compress, reflection, forget）")
+    except Exception as e:
+        print(f"[Memory] 记忆模块加载异常（可忽略）: {e}")
+
     yield
     print("👋 AI 聊天平台已关闭")
 

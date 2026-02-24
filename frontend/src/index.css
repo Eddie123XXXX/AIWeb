@@ -1955,6 +1955,7 @@ a.sidebar__user-menu-item {
   width: max-content;
   max-width: 100%;
   border-bottom-right-radius: 0.2rem;
+  font-size: 0.9rem; /* 用户消息文字大小，可改为 0.9rem、1.1rem 等 */
 }
 
 [data-theme="light"] .chat__message--user {

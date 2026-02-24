@@ -87,7 +87,7 @@ export function useChat(conversationId = null, options = {}) {
   }, []);
 
   const sendMessage = useCallback(
-    async (text, modelId = DEFAULT_MODEL_ID) => {
+    async (text, modelId = DEFAULT_MODEL_ID, conversationIdOverride = null) => {
       const trimmed = text?.trim();
       if (!trimmed || isStreaming) return;
 
@@ -111,7 +111,8 @@ export function useChat(conversationId = null, options = {}) {
           temperature: 0.7,
           max_tokens: 1024,
         };
-        if (conversationId) payload.conversation_id = conversationId;
+        const cid = conversationIdOverride ?? conversationId;
+        if (cid) payload.conversation_id = cid;
         ws.send(JSON.stringify(payload));
       } catch (err) {
         console.error(err);
