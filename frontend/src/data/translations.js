@@ -95,6 +95,27 @@ export const translations = {
   backendConnectionHintProxy: { zh: '请确认已启动后端（npm run dev 会通过代理访问 8000 端口）。', en: 'Please ensure the backend is running (dev server proxies to port 8000).' },
   cannotConnectBackend: { zh: '无法连接后端：', en: 'Cannot connect to backend: ' },
 
+  // Quick Parse / 附件上传
+  quickParseUnsupportedFilePrefix: { zh: '暂不支持该文件格式：', en: 'File type not supported: ' },
+  quickParseSupportedTypesSuffix: {
+    zh: '。当前支持：PDF、Word(docx)、Excel(xls/xlsx)、CSV、TXT。',
+    en: '. Supported: PDF, Word (docx), Excel (xls/xlsx), CSV, TXT.',
+  },
+  quickParseFileTooLargePrefix: { zh: '文件过大：', en: 'File is too large: ' },
+  quickParseFileTooLargeSuffix: {
+    zh: '（最大支持 20MB）。',
+    en: ' (maximum supported size is 20 MB).',
+  },
+  quickParseFileDuplicatedPrefix: { zh: '文件已附加：', en: 'File already attached: ' },
+  quickParseFileDuplicatedSuffix: {
+    zh: '，请不要重复上传。',
+    en: ', please do not upload it again.',
+  },
+  quickParseNotice: {
+    zh: '提示：文件内容仅在当前对话中有效，不自动纳入模型长期记忆。深度及重复性需求请通过“知识库”功能实现。',
+    en: 'Note: The uploaded file is only used in the current turn and will NOT be stored in memory or future context. For multi-turn or deep usage, please use Wiki.',
+  },
+
   // 个人中心 / 其他
   personalCenter: { zh: '个人中心', en: 'Profile' },
   ragAssistant: { zh: 'RAG Assistant v2', en: 'RAG Assistant v2' },

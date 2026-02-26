@@ -2168,6 +2168,79 @@ a.sidebar__user-menu-item {
   color: #e5e7eb;
 }
 
+/* Quick Parse 提示消息：弱提示样式，不抢占主对话注意力 */
+.chat__message--notice {
+  font-size: 0.8rem;
+  color: var(--color-charcoal-light);
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+/* 用户发送的附件列表，显示在 ChatMessages 中 */
+.chat__file-message {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.chat__file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.chat__file-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--color-card-border);
+  background: var(--color-card-bg);
+  box-shadow: var(--shadow-card);
+  cursor: default;
+}
+
+.chat__file-icon-img {
+  width: 30px;
+  height: 30px;
+  border-radius: 0.5rem;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.chat__file-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat__file-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-charcoal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 10rem;
+}
+
+.chat__file-type {
+  font-size: 0.8rem;
+  color: var(--color-charcoal-light);
+}
+
+.chat__file-notice {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-charcoal-light);
+  text-align: right;
+}
+
 /* ========== 输入区 ========== */
 /* 输入区：基础布局（不包含定位） */
 .input-area {
@@ -2264,6 +2337,90 @@ a.sidebar__user-menu-item {
 
 .input-box__textarea::placeholder {
   color: var(--color-charcoal-light);
+}
+
+/* 已附加文件预览列表（Quick Parse 临时文件） */
+.input-box__file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0 1.5rem 0.5rem;
+  margin-top: -0.5rem;
+}
+
+.input-box__file-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.75rem;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-card);
+  max-width: 100%;
+}
+
+.input-box__file-icon-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 0.5rem;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.input-box__file-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.input-box__file-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-charcoal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 12rem;
+}
+
+.input-box__file-type {
+  font-size: 0.7rem;
+  color: var(--color-charcoal-light);
+}
+
+.input-box__file-remove {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin-left: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--color-charcoal-light);
+  border-radius: 999px;
+  width: 1.5rem;
+  height: 1.5rem;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.input-box__file-remove:hover {
+  background: var(--hover-bg);
+  color: var(--color-charcoal);
+}
+
+.input-box__file-preview:hover .input-box__file-remove {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.input-area__error {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #dc2626;
+  text-align: left;
 }
 
 .input-box__row {

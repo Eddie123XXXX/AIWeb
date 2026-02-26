@@ -15,9 +15,50 @@ import { RAGSearch } from './pages/RAGSearch';
 import { Profile } from './pages/Profile';
 import { useTheme } from './hooks/useTheme';
 import { useChat } from './hooks/useChat';
+import { useTranslation } from './context/LocaleContext';
+
+const ATTACHMENTS_STORAGE_KEY = 'chat-file-attachments';
+
+function loadAttachmentsMap() {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(ATTACHMENTS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveAttachmentsMap(map) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(ATTACHMENTS_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+function getConversationAttachments(conversationId) {
+  if (!conversationId) return [];
+  const map = loadAttachmentsMap();
+  const list = map[conversationId];
+  return Array.isArray(list) ? list : [];
+}
+
+function addConversationAttachment(conversationId, entry) {
+  if (!conversationId) return;
+  const map = loadAttachmentsMap();
+  const list = Array.isArray(map[conversationId]) ? map[conversationId] : [];
+  list.push(entry);
+  map[conversationId] = list;
+  saveAttachmentsMap(map);
+}
 
 export function App() {
   const { toggleTheme } = useTheme();
+  const t = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true
   );
@@ -25,6 +66,11 @@ export function App() {
   const [conversationId, setConversationId] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
+
+  // Quick Parse：当前轮附加文件（已上传到 MinIO 并拿到可访问 URL）
+  const [quickParseFiles, setQuickParseFiles] = useState([]);
+  // Quick Parse 上传错误提示（如格式不支持、文件过大），仅存错误类型与文件名，实际文案由多语言渲染
+  const [attachError, setAttachError] = useState(null);
 
   const [models, setModels] = useState([]);
   const [modelId, setModelId] = useState(() =>
@@ -183,26 +229,60 @@ export function App() {
     }
   }, [setMessages, createConversation, modelId]);
 
-  const handleSelectConversation = useCallback(async (id) => {
-    setSidebarOpen(false);
-    try {
-      const resp = await fetch(apiUrl(`/api/history/conversations/${id}`), {
-        headers: getAuthHeaders(),
-      });
-      if (!resp.ok) return;
-      const detail = await resp.json();
-      setConversationId(detail.id);
-      setMessages(
-        (detail.messages || []).map((m) => ({
+  const handleSelectConversation = useCallback(
+    async (id) => {
+      setSidebarOpen(false);
+      try {
+        const resp = await fetch(apiUrl(`/api/history/conversations/${id}`), {
+          headers: getAuthHeaders(),
+        });
+        if (!resp.ok) return;
+        const detail = await resp.json();
+        setConversationId(detail.id);
+
+        const baseMessages = (detail.messages || []).map((m) => ({
           role: m.role || 'user',
           content: m.content || '',
-        }))
-      );
-    } catch {
-      setConversationId(id);
-      setMessages([]);
-    }
-  }, [setMessages]);
+        }));
+
+        const attachments = getConversationAttachments(detail.id).slice().sort((a, b) => {
+          return (a.textIndex || 0) - (b.textIndex || 0);
+        });
+
+        if (!attachments.length) {
+          setMessages(baseMessages);
+          return;
+        }
+
+        const enhanced = [];
+        let textIndex = 0;
+        let attIdx = 0;
+
+        for (const msg of baseMessages) {
+          while (attIdx < attachments.length && textIndex === (attachments[attIdx].textIndex || 0)) {
+            const att = attachments[attIdx];
+            if (att.files && att.files.length) {
+              enhanced.push({
+                role: 'user',
+                content: '',
+                files: att.files,
+                isFiles: true,
+              });
+            }
+            attIdx += 1;
+          }
+          enhanced.push(msg);
+          textIndex += 1;
+        }
+
+        setMessages(enhanced);
+      } catch {
+        setConversationId(id);
+        setMessages([]);
+      }
+    },
+    [setMessages]
+  );
 
   const handleRenameConversation = useCallback(async (id, newTitle) => {
     try {
@@ -242,6 +322,11 @@ export function App() {
 
   const handleSendWithModel = useCallback(
     async (text) => {
+      const filesForThisRound = quickParseFiles;
+      const hasFiles = filesForThisRound.length > 0;
+      // 当前已有的纯文本消息数量（不含前端文件预览消息）
+      const textIndexBefore = messages.filter((m) => !m.isFiles).length;
+
       let cid = conversationId;
       if (!cid) {
         const conv = await createConversation('新对话', modelId);
@@ -250,12 +335,137 @@ export function App() {
           setConversationId(cid);
           setConversations((prev) => [{ ...conv, title: conv.title || '新对话' }, ...prev]);
         }
-        return sendMessage(text, modelId, cid ?? undefined);
+        if (hasFiles && cid) {
+          addConversationAttachment(cid, { textIndex: textIndexBefore, files: filesForThisRound });
+        }
+        if (hasFiles) {
+          setQuickParseFiles([]);
+          setAttachError(null);
+        }
+        return sendMessage(text, modelId, cid ?? undefined, filesForThisRound);
       }
-      return sendMessage(text, modelId);
+
+      if (hasFiles && cid) {
+        addConversationAttachment(cid, { textIndex: textIndexBefore, files: filesForThisRound });
+      }
+      if (hasFiles) {
+        setQuickParseFiles([]);
+        setAttachError(null);
+      }
+      return sendMessage(text, modelId, null, filesForThisRound);
     },
-    [sendMessage, modelId, conversationId, createConversation]
+    [sendMessage, modelId, conversationId, createConversation, quickParseFiles, messages]
   );
+
+  const handleAttachFiles = useCallback(
+    async (fileList) => {
+      if (!token) return;
+      const headers = getAuthHeaders();
+      const files = Array.isArray(fileList) ? fileList : [];
+      if (files.length === 0) return;
+
+       // 前端快速校验：类型与大小
+      const MAX_SIZE = 20 * 1024 * 1024; // 20MB 单文件大小上限
+      const SUPPORTED_EXTS = ['pdf', 'docx', 'xlsx', 'xls', 'csv', 'txt'];
+      // 仅记录错误类型和文件名，具体文案交给多语言渲染
+      let lastError = null;
+
+      const validFiles = files.filter((file) => {
+        const name = file.name || '';
+        const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+        if (!SUPPORTED_EXTS.includes(ext)) {
+          lastError = { type: 'unsupported', filename: name };
+          return false;
+        }
+        if (typeof file.size === 'number' && file.size > MAX_SIZE) {
+          lastError = { type: 'tooLarge', filename: name };
+          return false;
+        }
+        return true;
+      });
+
+      // 去重：不允许重复附加同名且大小相同的文件
+      const existingKeys = new Set(
+        quickParseFiles.map((f) =>
+          `${(f.filename || '').toLowerCase()}::${typeof f.size === 'number' ? f.size : 0}`
+        )
+      );
+      const dedupedFiles = [];
+      for (const file of validFiles) {
+        const key = `${(file.name || '').toLowerCase()}::${typeof file.size === 'number' ? file.size : 0}`;
+        if (existingKeys.has(key)) {
+          lastError = { type: 'duplicated', filename: file.name };
+          continue;
+        }
+        existingKeys.add(key);
+        dedupedFiles.push(file);
+      }
+
+      setAttachError(lastError);
+
+      if (dedupedFiles.length === 0) {
+        return;
+      }
+
+      try {
+        const uploaded = [];
+        for (const file of dedupedFiles) {
+          const formData = new FormData();
+          formData.append('file', file);
+          const uploadResp = await fetch(apiUrl('/api/infra/minio/upload'), {
+            method: 'POST',
+            headers: {
+              ...headers,
+              // 不手动设置 Content-Type，交由浏览器生成 multipart 边界
+            },
+            body: formData,
+          });
+          if (!uploadResp.ok) {
+            // eslint-disable-next-line no-console
+            console.error('上传失败', await uploadResp.text());
+            continue;
+          }
+          const uploadData = await uploadResp.json();
+          // 优先使用上传接口直接返回的预签名 URL
+          let fileUrl = uploadData.url;
+          const objectName = uploadData.object_name;
+          // 兼容老版本：如 upload 未返回 url，则回退调用 /url 接口
+          if (!fileUrl && objectName) {
+            const urlResp = await fetch(
+              apiUrl(`/api/infra/minio/url/${encodeURIComponent(objectName)}`),
+              { headers }
+            );
+            if (!urlResp.ok) {
+              // eslint-disable-next-line no-console
+              console.error('预签名 URL 获取失败', await urlResp.text());
+              continue;
+            }
+            const urlData = await urlResp.json();
+            if (!urlData.url) continue;
+            fileUrl = urlData.url;
+          }
+          if (!fileUrl) continue;
+          uploaded.push({
+            url: fileUrl,
+            filename: file.name,
+            mime_type: file.type || uploadData.content_type || 'application/octet-stream',
+            size: typeof file.size === 'number' ? file.size : uploadData.size,
+          });
+        }
+        if (uploaded.length > 0) {
+          setQuickParseFiles((prev) => [...prev, ...uploaded]);
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('附加文件失败', e);
+      }
+    },
+    [token, quickParseFiles]
+  );
+
+  const handleRemoveAttachedFile = useCallback((index) => {
+    setQuickParseFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   // 切换模型时，同时支持“设为默认”持久化到 localStorage，并更新默认模型 ID
   // 行为：
@@ -317,6 +527,10 @@ export function App() {
           isStreaming={isStreaming}
           onSend={handleSendWithModel}
           onCancelStream={cancelStream}
+          onAttachFiles={handleAttachFiles}
+          attachedFiles={quickParseFiles}
+          attachError={attachError}
+          onRemoveAttachedFile={handleRemoveAttachedFile}
         />
         {hasChat && (
           <InputArea
@@ -324,6 +538,10 @@ export function App() {
             isStreaming={isStreaming}
             onCancelStream={cancelStream}
             hasChat={hasChat}
+            onAttachFiles={handleAttachFiles}
+            attachedFiles={quickParseFiles}
+            attachError={attachError}
+            onRemoveAttachedFile={handleRemoveAttachedFile}
           />
         )}
       </main>

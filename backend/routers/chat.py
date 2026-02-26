@@ -14,6 +14,7 @@ from services.llm_service import (
     generate_sse_stream_with_persist,
 )
 from routers.models import get_model_config_by_id
+from services.quick_parse import build_quick_parse_system_content
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -44,8 +45,23 @@ async def _resolve_conversation_and_messages(request: ChatRequest) -> tuple[str 
     若带 conversation_id：校验会话存在，取 Redis/DB 上下文，召回长期记忆，拼装成发给 LLM 的 messages。
     返回 (conversation_id 或 None, messages)。
     """
+    # 若存在 Quick Parse 临时文件，先构建一条额外的 system 消息，用于注入工作记忆
+    quick_parse_message: Message | None = None
+    if getattr(request, "quick_parse_files", None):
+        qp_content = await build_quick_parse_system_content(request.quick_parse_files or [])
+        if qp_content:
+            quick_parse_message = Message(role=Role.SYSTEM, content=qp_content)
+
     if not request.conversation_id:
-        return None, list(request.messages)
+        base_messages = list(request.messages)
+        if not base_messages:
+            return None, []
+        # 将 Quick Parse 工作记忆插入到最后一条用户消息之前
+        if quick_parse_message:
+            context_msgs = base_messages[:-1]
+            last = base_messages[-1]
+            return None, [*context_msgs, quick_parse_message, last]
+        return None, base_messages
 
     conv = await conversation_repository.get_by_id(request.conversation_id)
     if not conv:
@@ -70,8 +86,21 @@ async def _resolve_conversation_and_messages(request: ChatRequest) -> tuple[str 
     messages: list[Message] = []
     if system_parts:
         messages.append(Message(role=Role.SYSTEM, content="\n\n".join(system_parts)))
+
     rest = _build_messages_for_llm(request, context)
-    messages.extend(rest)
+    if not rest:
+        return request.conversation_id, messages
+
+    # 将 Quick Parse 工作记忆插入到最后一条用户消息之前，使其与本轮问题紧邻
+    if quick_parse_message:
+        context_msgs = rest[:-1]
+        last = rest[-1]
+        messages.extend(context_msgs)
+        messages.append(quick_parse_message)
+        messages.append(last)
+    else:
+        messages.extend(rest)
+
     return request.conversation_id, messages
 
 

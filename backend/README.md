@@ -1,22 +1,25 @@
-# AI 聊天平台后端
+# AI 聊天平台后端 🧠
 
-基于 FastAPI 构建的多模型 LLM 聊天服务后端。
+基于 FastAPI 构建的多模型 LLM 聊天服务后端，是整个 AIWeb 的「中枢神经」。  
+负责把模型、记忆、RAG、文件解析、用户体系这些能力都串起来。
 
-## 功能特性
+## ✨ 功能特性
 
-- 🤖 支持多种 LLM 提供商
-  - OpenAI (GPT-4, GPT-3.5-turbo)
+- 🤖 **多模型支持**
+  - OpenAI (GPT-4, GPT-4o, GPT-3.5-turbo)
   - Anthropic (Claude 3)
   - DeepSeek
   - 通义千问 (Qwen)
   - Moonshot (Kimi)
   - 智谱 AI (GLM)
   - 自定义 OpenAI 兼容接口
-- 🔑 灵活的 API Key 管理
-- 💬 支持流式/非流式对话
-- 🔌 OpenAI 兼容接口设计
+- 🔑 **灵活的 API Key 管理**
+- 💬 **流式 / 非流式对话**
+- 🧠 **长期记忆模块（memory）集成**
+- 📎 **Quick Parse 文件解析（MinIO + 长上下文模型）**
+- 🔌 **OpenAI 兼容接口设计**（/api/chat, /api/models 等）
 
-## 快速开始
+## 🚀 快速开始
 
 ### 1. 安装依赖
 
@@ -28,7 +31,7 @@ pip install -r requirements.txt
 # 使用venv环境命令行
 .\.venv\Scripts\Activate.ps1
 
-### 2. 启动服务
+### 2. 启动服务（后端）
 
 **Windows 推荐不用 `--reload`**（否则 uvicorn 父子进程可能导致请求到不了应用，出现 404/无响应、终端无日志）：
 
@@ -43,11 +46,16 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 需要热重载时再使用 `--reload`（若出现访问无响应，请改回上述方式）。
 
-### 3. 访问 API 文档
+### 3. 访问 API 文档（Swagger / ReDoc）
 
-启动后访问 http://localhost:8000/docs 查看完整的 API 文档。
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
-## API 接口
+你可以把后端当成标准的「OpenAI 风格 API」，也可以直接在 Swagger 里玩。😄
+
+---
+
+## 📡 API 接口概览
 
 ### 模型管理
 
@@ -82,7 +90,7 @@ GET /api/models
 DELETE /api/models/{model_id}
 ```
 
-### 聊天
+### 💬 聊天
 
 #### 发送消息（流式）
 ```http
@@ -129,7 +137,7 @@ Content-Type: application/json
 }
 ```
 
-## 使用示例
+## 🧪 使用示例
 
 ### Python 示例
 
@@ -216,7 +224,7 @@ while (true) {
 }
 ```
 
-## 项目结构
+## 🗂 项目结构（后端部分）
 
 ```
 backend/
@@ -234,7 +242,7 @@ backend/
     └── llm_service.py   # LLM 服务封装
 ```
 
-## 测试脚本
+## 🧫 测试脚本
 
 ```bash
 cd backend
@@ -245,10 +253,14 @@ python -m test_chat_flow
 python -m memory.test_memory_full
 ```
 
-## 后续规划
+## 🗺 后续规划 / 进度同步
 
-- [ ] RAG 支持（向量数据库集成）
-- [ ] 对话历史持久化
-- [ ] 文件上传与解析
-- [ ] 用户认证
-- [ ] 使用统计
+- [x] 对话历史持久化（PostgreSQL + Redis）
+- [x] 文件上传与解析（Quick Parse，基于 MinIO）
+- [x] 长期记忆模块（memory，Milvus + PostgreSQL）
+- [ ] RAG 支持（知识库向量检索完整工作流）
+- [ ] 用户认证 / 多用户隔离
+- [ ] 使用统计与配额（调用次数 / Token 用量）
+
+如果你想「只用后端」做自己的多模型聊天服务，也完全没问题 ——  
+把 `/api/models` 和 `/api/chat` 当成 OpenAI 兼容接口来打就行了。😉

@@ -12,6 +12,10 @@ export function Welcome({
   isStreaming,
   onSend,
   onCancelStream,
+  onAttachFiles,
+  attachedFiles = [],
+  attachError = null,
+  onRemoveAttachedFile,
 }) {
   const t = useTranslation();
   const user = getStoredUser();
@@ -41,6 +45,10 @@ export function Welcome({
             isStreaming={isStreaming}
             onCancelStream={onCancelStream}
             hasChat={false}
+            onAttachFiles={onAttachFiles}
+            attachedFiles={attachedFiles}
+            attachError={attachError}
+            onRemoveAttachedFile={onRemoveAttachedFile}
           />
         )}
 

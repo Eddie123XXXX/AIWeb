@@ -30,7 +30,19 @@ async def upload(
         service.upload_object(name, BytesIO(body), length, content_type=content_type)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"存储上传失败: {e}")
-    return {"object_name": name, "size": length, "content_type": content_type}
+    # 同步生成预签名 URL，便于前端直接使用；失败时不影响上传本身
+    presigned_url: Optional[str] = None
+    try:
+        presigned_url = service.get_presigned_url(name, expires_seconds=3600)
+    except Exception:
+        presigned_url = None
+    return {
+        "object_name": name,
+        "size": length,
+        "content_type": content_type,
+        "url": presigned_url,
+        "expires_seconds": 3600,
+    }
 
 
 @router.get("/list", summary="列出对象")

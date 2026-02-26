@@ -16,6 +16,9 @@ export function Chat({ messages, streamingContent, isStreaming }) {
           role={msg.role}
           content={msg.content}
           isMarkdown={msg.role === 'assistant'}
+          files={msg.files}
+          isFiles={msg.isFiles}
+          isQuickParseNotice={msg.isQuickParseNotice}
         />
       ))}
       {streamingContent ? (

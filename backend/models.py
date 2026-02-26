@@ -26,6 +26,14 @@ class Message(BaseSchema):
     content: str
 
 
+class QuickParseFile(BaseSchema):
+    """Quick Parse 临时解析文件（仅参与当前轮对话，不写入长期记忆/RAG）"""
+    url: str = Field(..., description="已上传到对象存储后的可访问 URL（通常为 MinIO 预签名链接）")
+    filename: Optional[str] = Field(default=None, description="原始文件名，仅用于提示")
+    mime_type: Optional[str] = Field(default=None, description="MIME 类型，如 application/pdf、text/csv 等")
+    size: Optional[int] = Field(default=None, description="文件字节数，用于粗略估算上下文大小")
+
+
 class ChatRequest(BaseSchema):
     """聊天请求"""
     model_id: str = Field(..., description="使用的模型配置ID")
@@ -34,6 +42,10 @@ class ChatRequest(BaseSchema):
     conversation_id: Optional[str] = Field(default=None, description="关联的会话ID，用于历史记录")
     temperature: Optional[float] = Field(default=None, description="温度参数，覆盖模型默认值")
     max_tokens: Optional[int] = Field(default=None, description="最大token数，覆盖模型默认值")
+    quick_parse_files: Optional[List[QuickParseFile]] = Field(
+        default=None,
+        description="Quick Parse 临时文件列表，仅在当前轮对话中作为工作记忆注入，不写入长期记忆/RAG",
+    )
 
 
 class ChatResponse(BaseSchema):

@@ -1,11 +1,20 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from '../context/LocaleContext';
+import pdfIcon from '../../img/file type icon/PDF (1).png';
+import wordIcon from '../../img/file type icon/DOCX.png';
+import sheetIcon from '../../img/file type icon/XLS.png';
+import textIcon from '../../img/file type icon/DOCX.png';
+import genericFileIcon from '../../img/file type icon/DOCX.png';
 
 export function InputArea({
   onSend,
   isStreaming,
   onCancelStream,
   hasChat,
+  onAttachFiles,
+  attachedFiles = [],
+  attachError = null,
+  onRemoveAttachedFile,
   showAttach = true,
   showMore = true,
 }) {
@@ -13,6 +22,7 @@ export function InputArea({
   const [value, setValue] = useState('');
   const textareaRef = useRef(null);
   const moreRef = useRef(null);
+  const fileInputRef = useRef(null);
   const [enteringFixed, setEnteringFixed] = useState(false);
 
   const handleSubmit = useCallback(() => {
@@ -35,6 +45,23 @@ export function InputArea({
     } else {
       handleSubmit();
     }
+  };
+
+  const handleAttachClick = () => {
+    if (isStreaming) return;
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    if (onAttachFiles) {
+      onAttachFiles(Array.from(files));
+    }
+    // 允许选择同一个文件多次
+    e.target.value = '';
   };
 
   // 让“更多选项”的浮窗在点击外部时自动收起
@@ -88,17 +115,92 @@ export function InputArea({
             onKeyDown={handleKeyDown}
             disabled={isStreaming}
           />
+
+          {attachedFiles && attachedFiles.length > 0 && (
+            <div className="input-box__file-list" aria-label="已附加文件">
+              {attachedFiles.map((file, index) => {
+                const name = file.filename || file.name || '未命名文件';
+                const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+                let typeLabel = '文件';
+                let typeClass = 'other';
+                let iconSrc = genericFileIcon;
+                if (ext === 'pdf') {
+                  typeLabel = 'PDF';
+                  typeClass = 'pdf';
+                  iconSrc = pdfIcon;
+                } else if (ext === 'doc' || ext === 'docx') {
+                  typeLabel = 'Word';
+                  typeClass = 'word';
+                  iconSrc = wordIcon;
+                } else if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') {
+                  typeLabel = '表格';
+                  typeClass = 'sheet';
+                  iconSrc = sheetIcon;
+                } else if (ext === 'txt') {
+                  typeLabel = '文本';
+                  typeClass = 'text';
+                  iconSrc = textIcon;
+                }
+                const shortName =
+                  name.length > 24 ? `${name.slice(0, 10)}...${name.slice(-8)}` : name;
+
+                return (
+                  <div
+                    key={`${name}-${index}`}
+                    className="input-box__file-preview"
+                    data-test-id="file-preview"
+                  >
+                    <img
+                      className={`input-box__file-icon-img input-box__file-icon-img--${typeClass}`}
+                      src={iconSrc}
+                      alt={`${typeLabel} icon`}
+                    />
+                    <div className="input-box__file-meta">
+                      <div
+                        className="input-box__file-name"
+                        title={name}
+                        data-test-id="file-name"
+                      >
+                        {shortName}
+                      </div>
+                      <div className="input-box__file-type">{typeLabel}</div>
+                    </div>
+                    {onRemoveAttachedFile && (
+                      <button
+                        type="button"
+                        className="input-box__file-remove"
+                        aria-label={`移除文件“${name}”`}
+                        onClick={() => onRemoveAttachedFile(index)}
+                      >
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <div className="input-box__row">
             <div className="input-box__tools">
               {showAttach && (
-                <button
-                  type="button"
-                  className="input-box__tool-btn"
-                  title="附加文件"
-                  aria-label="附加文件"
-                >
-                  <span className="material-symbols-outlined">attach_file</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="input-box__tool-btn"
+                    title="附加文件"
+                    aria-label="附加文件"
+                    onClick={handleAttachClick}
+                  >
+                    <span className="material-symbols-outlined">attach_file</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={handleFileChange}
+                  />
+                </>
               )}
               <button
                 type="button"
@@ -146,9 +248,17 @@ export function InputArea({
             </button>
           </div>
         </div>
-        <p className="input-area__disclaimer">
-          {t('disclaimer')}
-        </p>
+        {attachError && (
+          <p className="input-area__error" role="status">
+            {attachError.type === 'unsupported' &&
+              `${t('quickParseUnsupportedFilePrefix')}${attachError.filename}${t('quickParseSupportedTypesSuffix')}`}
+            {attachError.type === 'tooLarge' &&
+              `${t('quickParseFileTooLargePrefix')}${attachError.filename}${t('quickParseFileTooLargeSuffix')}`}
+            {attachError.type === 'duplicated' &&
+              `${t('quickParseFileDuplicatedPrefix')}${attachError.filename}${t('quickParseFileDuplicatedSuffix')}`}
+          </p>
+        )}
+        <p className="input-area__disclaimer">{t('disclaimer')}</p>
       </div>
     </div>
   );

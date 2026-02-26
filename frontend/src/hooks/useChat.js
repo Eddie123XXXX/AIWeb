@@ -27,6 +27,7 @@ export function useChat(conversationId = null, options = {}) {
   const wsReadyRef = useRef(null);
   const streamingBufferRef = useRef('');
   const onRoundCompleteRef = useRef(onRoundComplete);
+  const lastQuickParseUsedRef = useRef(false);
   onRoundCompleteRef.current = onRoundComplete;
 
   const ensureWebSocket = useCallback(() => {
@@ -70,8 +71,30 @@ export function useChat(conversationId = null, options = {}) {
           streamingBufferRef.current = '';
           setStreamingContent('');
           if (content) {
-            setMessages((prev) => [...prev, { role: 'assistant', content }]);
+            setMessages((prev) => {
+              const next = [...prev, { role: 'assistant', content }];
+              if (lastQuickParseUsedRef.current) {
+                next.push({
+                  role: 'assistant',
+                  content:
+                    '提示：本轮使用了临时上传的文件进行 Quick Parse，这些文件内容不会写入长期记忆或后续上下文历史。如需对文档进行多轮、深度使用，建议将其上传到知识库功能中。',
+                  isQuickParseNotice: true,
+                });
+              }
+              return next;
+            });
+          } else if (lastQuickParseUsedRef.current) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: 'assistant',
+                content:
+                  '提示：本轮使用了临时上传的文件进行 Quick Parse，这些文件内容不会写入长期记忆或后续上下文历史。如需对文档进行多轮、深度使用，建议将其上传到知识库功能中。',
+                isQuickParseNotice: true,
+              },
+            ]);
           }
+          lastQuickParseUsedRef.current = false;
           setIsStreaming(false);
           if (data.conversation_id && onRoundCompleteRef.current) {
             onRoundCompleteRef.current(data.conversation_id);
@@ -87,12 +110,27 @@ export function useChat(conversationId = null, options = {}) {
   }, []);
 
   const sendMessage = useCallback(
-    async (text, modelId = DEFAULT_MODEL_ID, conversationIdOverride = null) => {
+    async (text, modelId = DEFAULT_MODEL_ID, conversationIdOverride = null, quickParseFiles = null) => {
       const trimmed = text?.trim();
       if (!trimmed || isStreaming) return;
 
-      const userMessage = { role: 'user', content: trimmed };
-      setMessages((prev) => [...prev, userMessage]);
+      const filesForThisRound = Array.isArray(quickParseFiles) ? quickParseFiles : null;
+      lastQuickParseUsedRef.current = !!(filesForThisRound && filesForThisRound.length > 0);
+
+      // 1) 先在前端对话区追加“文件预览消息”（仅用于展示，不发给后端）
+      setMessages((prev) => {
+        const next = [...prev];
+        if (filesForThisRound && filesForThisRound.length > 0) {
+          next.push({
+            role: 'user',
+            content: '',
+            files: filesForThisRound,
+            isFiles: true,
+          });
+        }
+        next.push({ role: 'user', content: trimmed });
+        return next;
+      });
       setStreamingContent('');
       setError(null);
       setIsStreaming(true);
@@ -103,7 +141,9 @@ export function useChat(conversationId = null, options = {}) {
         if (!ws || ws.readyState !== WebSocket.OPEN) {
           throw new Error('WebSocket 未连接');
         }
-        const nextMessages = [...messages, userMessage];
+        // 仅将文字消息发给后端，不包含前端用于展示的文件消息
+        const textHistory = messages.filter((m) => !m.isFiles);
+        const nextMessages = [...textHistory, { role: 'user', content: trimmed }];
         const payload = {
           model_id: modelId || DEFAULT_MODEL_ID,
           messages: nextMessages,
@@ -113,6 +153,14 @@ export function useChat(conversationId = null, options = {}) {
         };
         const cid = conversationIdOverride ?? conversationId;
         if (cid) payload.conversation_id = cid;
+        if (Array.isArray(quickParseFiles) && quickParseFiles.length > 0) {
+          payload.quick_parse_files = quickParseFiles.map((f) => ({
+            url: f.url,
+            filename: f.filename,
+            mime_type: f.mime_type,
+            size: f.size,
+          }));
+        }
         ws.send(JSON.stringify(payload));
       } catch (err) {
         console.error(err);

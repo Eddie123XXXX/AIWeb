@@ -1,8 +1,9 @@
-# 后端 Infra 服务
+# 后端 Infra 服务 ⚙️
 
-本目录用于集中管理对接**外部/基础设施**的代码（如 MinIO、Redis、数据库等），与业务路由 `routers/`、通用业务服务 `services/` 区分开，便于扩展和维护。
+本目录用于集中管理对接**外部/基础设施**的代码（如 MinIO、Redis、数据库等），  
+和业务路由 `routers/`、通用业务服务 `services/` 分层，方便你在不「拆后端」的前提下疯狂扩展能力。😄
 
-## 目录约定
+## 📁 目录约定
 
 每个子目录对应一种基础设施服务，建议结构：
 
@@ -34,10 +35,10 @@ infra/
     router.py
 ```
 
-- **service / client**：连接配置、读写逻辑，不依赖 FastAPI。
+- **service / client**：连接配置、读写逻辑，不依赖 FastAPI，可在脚本/任务中直接复用。
 - **router**：对外 HTTP 接口，仅在本模块内引用 service，在 `main.py` 中挂载。
 
-## 在 main.py 中挂载
+## 🧩 在 main.py 中挂载
 
 ```python
 from infra.minio import router as storage_router
@@ -54,4 +55,5 @@ app.include_router(rabbitmq_router, prefix="/api")
 app.include_router(es_router, prefix="/api")
 ```
 
-新增服务时同理：在对应子目录实现 `router`，在 `main.py` 中 `from infra.xxx import router` 并 `include_router`。
+新增服务时同理：在对应子目录实现 `router`，在 `main.py` 中 `from infra.xxx import router` 并 `include_router` 即可。  
+这样一来，「加一个 Milvus」「换一个 Redis」「加一条健康检查路由」都不会污染业务代码。🚀

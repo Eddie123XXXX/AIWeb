@@ -2,6 +2,7 @@
 MinIO 对象存储服务
 """
 import os
+from datetime import timedelta
 from typing import BinaryIO, Optional
 
 from minio import Minio
@@ -82,11 +83,15 @@ def delete_object(object_name: str) -> None:
 
 
 def get_presigned_url(
-    object_name: str, expires_seconds: int = 3600
+    object_name: str,
+    expires_seconds: int = 3600,
 ) -> str:
     """生成预签名下载 URL。"""
     client = _get_client()
     bucket = _get_bucket()
+    # MinIO Python SDK 要求 expires 为 datetime.timedelta，而不是 int
     return client.presigned_get_object(
-        bucket, object_name, expires=expires_seconds
+        bucket,
+        object_name,
+        expires=timedelta(seconds=int(expires_seconds)),
     )

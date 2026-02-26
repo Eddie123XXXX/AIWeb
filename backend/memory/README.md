@@ -1,8 +1,11 @@
-# Memory 模块
+# Memory 模块 🧠
 
-Agent 长期记忆与反思模块，为对话模式提供分层记忆能力。支持**异步打分写入**与**三维混合召回**（语义 + 时间衰减 + 重要性）。
+Agent 的「长期记忆 + 反思」模块，为对话模式提供分层记忆能力。  
+支持**异步打分写入**与**三维混合召回**（语义 + 时间衰减 + 重要性），还能自动做「高层总结」和「遗忘清理」。
 
-## 目录结构
+适合存储：用户偏好、关键决策、长期项目背景等「下次再聊还想记得住」的内容。📒
+
+## 📁 目录结构
 
 ```
 memory/
@@ -15,9 +18,9 @@ memory/
 └── README.md
 ```
 
-## 架构概览
+## 🧬 架构概览
 
-### 数据流
+### 🔄 数据流
 
 ```
 对话回合结束
@@ -59,7 +62,7 @@ memory/
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 打分公式
+### 🧮 打分公式
 
 $$S_{final} = \alpha \cdot S_{semantic} + \beta \cdot S_{time\_decay} + \gamma \cdot S_{importance}$$
 
@@ -69,7 +72,7 @@ $$S_{final} = \alpha \cdot S_{semantic} + \beta \cdot S_{time\_decay} + \gamma \
 
 默认权重：α=0.5, β=0.2, γ=0.3（可通过参数覆盖）
 
-## 依赖
+## 🔗 依赖
 
 | 组件 | 用途 |
 |------|------|
@@ -78,7 +81,7 @@ $$S_{final} = \alpha \cdot S_{semantic} + \beta \cdot S_{time\_decay} + \gamma \
 | **Qwen API** | Embedding 模型（text-embedding-v4） |
 | **DeepSeek API** | 重要性打分模型（deepseek-chat，JSON 输出） |
 
-## 环境变量
+## ⚙️ 环境变量
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
@@ -95,7 +98,7 @@ $$S_{final} = \alpha \cdot S_{semantic} + \beta \cdot S_{time\_decay} + \gamma \
 
 **Milvus Schema**：collection 含 `domain`（领域过滤）、`content`（原文本，便于人类阅读，最大 4096 字符）。
 
-## 使用方式
+## 🧪 使用方式
 
 ### 1. 写入记忆（对话结束后调用）
 
@@ -202,7 +205,7 @@ python -m memory.test_memory
 
 会依次执行：创建测试用户/会话 → 写入记忆 → 混合召回，并在终端打印每步结果。
 
-## 数据表
+## 🗂 数据表
 
 依赖 `db/schema_agent_memories.sql`，执行 `python -m db.run_schema` 时会自动建表。核心字段：
 
@@ -215,7 +218,7 @@ python -m memory.test_memory
 - `importance_score`：0.0 ~ 1.0
 - `last_accessed_at`：用于时间衰减计算
 
-### 艾宾浩斯遗忘公式
+### 🧠 艾宾浩斯遗忘公式
 
 保持率 = `base_retention^(Δt / (24 × strengthening_factor^access_count)) × (0.5 + 0.5 × importance)`
 
@@ -223,7 +226,7 @@ python -m memory.test_memory
 - **access_count**：被召回次数，越高越抗遗忘
 - **importance**：重要性得分，越高越抗遗忘
 
-## 全功能测试
+## 🧫 全功能测试
 
 `test_memory_full.py` 覆盖记忆模块所有能力：
 

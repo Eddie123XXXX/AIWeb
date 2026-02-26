@@ -58,23 +58,31 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AI 聊天平台",
+    title="AI 聊天平台 🧠",
     description="""
+欢迎来到 AIWeb 的后端 API。这里是多模型对话、长期记忆、RAG 和 Quick Parse 背后的「控制中心」。🚀
+
 ## 功能特性
 
 - 🤖 支持多种 LLM 提供商（OpenAI、Anthropic、DeepSeek、通义千问、Moonshot、智谱等）
 - 🔑 灵活的 API Key 管理
-- 💬 流式/非流式对话
-- 🔌 OpenAI 兼容接口
+- 💬 流式 / 非流式对话
+- 🧠 长期记忆模块（Milvus + PostgreSQL）
+- 📎 Quick Parse 文件解析（MinIO + 长上下文模型）
+- 🔌 OpenAI 兼容接口设计（/api/chat, /api/models）
 
-## 当前进展
-用户界面
+## 进度概览
 
-## 后续规划
+- ✅ 对话历史持久化
+- ✅ 长期记忆与混合召回（memory）
+- ✅ 文件上传与 Quick Parse 解析
+- ⏳ 知识库 RAG 工作流（进行中）
+- ⏳ 用户系统与使用统计（规划中）
 
-- RAG 支持
-- 多轮对话历史
-- 文件上传解析
+你可以：
+
+- 直接在 Swagger 里试用接口；
+- 把本服务当成「自托管的 OpenAI 兼容后端」接到自己的前端里。😄
     """,
     version="1.0.0",
     lifespan=lifespan
