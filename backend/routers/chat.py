@@ -52,15 +52,24 @@ async def _resolve_conversation_and_messages(request: ChatRequest) -> tuple[str 
         if qp_content:
             quick_parse_message = Message(role=Role.SYSTEM, content=qp_content)
 
+    # 若存在 RAG 知识库检索上下文，构建 system 消息注入
+    rag_context_message: Message | None = None
+    if getattr(request, "rag_context", None) and str(request.rag_context).strip():
+        rag_context_message = Message(
+            role=Role.SYSTEM,
+            content="【知识库检索】\n请基于以下检索到的知识库内容回答用户问题。若检索结果与问题无关，可说明未找到相关信息。\n\n" + str(request.rag_context).strip(),
+        )
+
     if not request.conversation_id:
         base_messages = list(request.messages)
         if not base_messages:
             return None, []
-        # 将 Quick Parse 工作记忆插入到最后一条用户消息之前
-        if quick_parse_message:
+        # 将 Quick Parse / RAG 工作记忆插入到最后一条用户消息之前
+        extras = [m for m in (quick_parse_message, rag_context_message) if m is not None]
+        if extras:
             context_msgs = base_messages[:-1]
             last = base_messages[-1]
-            return None, [*context_msgs, quick_parse_message, last]
+            return None, [*context_msgs, *extras, last]
         return None, base_messages
 
     conv = await conversation_repository.get_by_id(request.conversation_id)
@@ -91,12 +100,13 @@ async def _resolve_conversation_and_messages(request: ChatRequest) -> tuple[str 
     if not rest:
         return request.conversation_id, messages
 
-    # 将 Quick Parse 工作记忆插入到最后一条用户消息之前，使其与本轮问题紧邻
-    if quick_parse_message:
+    # 将 Quick Parse / RAG 工作记忆插入到最后一条用户消息之前，使其与本轮问题紧邻
+    extras = [m for m in (quick_parse_message, rag_context_message) if m is not None]
+    if extras:
         context_msgs = rest[:-1]
         last = rest[-1]
         messages.extend(context_msgs)
-        messages.append(quick_parse_message)
+        messages.extend(extras)
         messages.append(last)
     else:
         messages.extend(rest)

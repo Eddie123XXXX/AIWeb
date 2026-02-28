@@ -23,6 +23,8 @@
 
 ### 1. 安装依赖
 
+`requirements.txt` 已包含运行与 RAG/记忆/Quick Parse 所需依赖，无需额外安装即可快速部署。可选：需本地 BGE-M3 稀疏向量时取消注释并安装 `FlagEmbedding`。
+
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -52,6 +54,36 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 - ReDoc: `http://localhost:8000/redoc`
 
 你可以把后端当成标准的「OpenAI 风格 API」，也可以直接在 Swagger 里玩。😄
+
+---
+
+## 🔄 实现流程详解
+
+### 对话请求全流程
+
+1. **前端**：建立 WebSocket 连接 `ws://host/api/chat/ws?token=...`，发送 JSON：`{ "message", "model_id", "conversation_id?", "rag_context?", "quick_parse_files?" }`。
+2. **后端** `routers/chat.py`：
+   - 解析 `conversation_id`，从 Redis 或 PostgreSQL 拉取历史消息（`services/chat_context.py`）。
+   - 若未传 `conversation_id` 则创建新会话并回写前端。
+   - **意图路由**：调用 `memory.get_intent_domains(user_input)` 得到领域，用于记忆过滤。
+   - **记忆召回**：`memory.retrieve_relevant_memories(user_id, query, ...)`，三维混合打分（语义 + 时间衰减 + 重要性），取 Top-K 拼入 system 的【长期记忆】块。
+   - **RAG 上下文**：若请求体带 `rag_context`，拼入 system 的【知识库检索】块。
+   - **Quick Parse**：若有 `quick_parse_files`，MinIO 拉取后 `services/quick_parse.py` 解析为 Markdown，拼入 system，仅当轮有效。
+   - 调用 `LLMService.chat(messages)` 流式生成，按 SSE 格式回推前端。
+   - 流结束后 `chat_context.persist_round` 写 messages 表，并 `asyncio.create_task(extract_and_store_memories_for_round(...))` 异步写入/反思记忆。
+
+### RAG 检索与文档流水线
+
+- **检索**：`POST /api/rag/search`（body：`notebook_id`, `query`, `document_ids?`）。仅勾选的知识源参与召回（`document_ids` 为空则无结果）。三路召回 → RRF → Reranker → Parent-Child 溯源，详见 `backend/rag/README.md`。
+- **文档**：上传 → SHA-256 防重/秒传 → MinIO；`/process` 触发解析（MinerU 或多格式）→ Block 规范化 → 图片上传+VLM 可选 → 版面感知切块 → PostgreSQL 存全量切片，仅 Child 做 Dense+Sparse 向量化写 Milvus。来源指南：`GET /documents/{id}/markdown` 若无 summary 则截断内容调 LLM 生成并入库。
+
+### 技术流程（分层）
+
+| 层 | 模块 | 职责 |
+|----|------|------|
+| 路由 | routers/chat, history, models, user; auth; rag/router | HTTP/WebSocket 入口、参数校验、调用 service |
+| 业务 | services/chat_context, llm_service, quick_parse; memory; rag/service | 会话与历史、LLM 调用、记忆写入/召回、RAG 编排与检索 |
+| 存储 | db/*_repository; infra (Redis, Postgres, MinIO, Milvus) | 用户/会话/消息/记忆/文档与切片的 CRUD、向量与对象存储 |
 
 ---
 
@@ -228,18 +260,25 @@ while (true) {
 
 ```
 backend/
-├── main.py              # FastAPI 应用入口
-├── config.py            # 配置管理
-├── models.py            # Pydantic 数据模型
+├── main.py              # FastAPI 应用入口，OpenAPI 描述与路由挂载
+├── config.py            # 模型与提供商配置
+├── models.py            # 全局 Pydantic 模型（用户、聊天等）
 ├── requirements.txt     # 依赖
-├── .env.example         # 环境变量示例
-├── routers/
-│   ├── __init__.py
-│   ├── chat.py          # 聊天路由
-│   └── models.py        # 模型配置路由
-└── services/
-    ├── __init__.py
-    └── llm_service.py   # LLM 服务封装
+├── .env / .env.example  # 环境变量
+├── routers/             # HTTP/WebSocket 路由
+│   ├── chat.py          # 聊天 WebSocket 与消息处理
+│   ├── history.py       # 会话与历史列表
+│   ├── models.py        # 模型配置 CRUD
+│   └── user.py          # 用户信息
+├── auth/                # 认证（占位与 JWT）
+├── services/
+│   ├── llm_service.py   # 多模型 LLM 调用封装
+│   ├── chat_context.py  # 会话与消息持久化、记忆写入触发
+│   └── quick_parse.py   # Quick Parse 文件解析
+├── memory/              # 长期记忆（打分、混合召回、反思、遗忘），见 memory/README.md
+├── rag/                 # 知识库（上传、解析、切块、检索、来源指南），见 rag/README.md
+├── db/                  # 建表脚本与说明，见 db/README.md
+└── infra/               # 基础设施适配（Redis、Postgres、MinIO、Milvus 等），见 infra/README.md
 ```
 
 ## 🧫 测试脚本
@@ -258,8 +297,8 @@ python -m memory.test_memory_full
 - [x] 对话历史持久化（PostgreSQL + Redis）
 - [x] 文件上传与解析（Quick Parse，基于 MinIO）
 - [x] 长期记忆模块（memory，Milvus + PostgreSQL）
-- [ ] RAG 支持（知识库向量检索完整工作流）
-- [ ] 用户认证 / 多用户隔离
+- [x] RAG 知识库（上传/解析/切块/向量化/三段式检索/来源指南）
+- [ ] 用户认证 / 多用户隔离（当前占位）
 - [ ] 使用统计与配额（调用次数 / Token 用量）
 
 如果你想「只用后端」做自己的多模型聊天服务，也完全没问题 ——  

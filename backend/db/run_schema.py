@@ -68,6 +68,9 @@ async def main() -> None:
         os.path.join(schema_dir, "schema_conversations.sql"),
         os.path.join(schema_dir, "schema_messages.sql"),
         os.path.join(schema_dir, "schema_agent_memories.sql"),
+        os.path.join(schema_dir, "schema_notebooks.sql"),
+        os.path.join(schema_dir, "schema_documents.sql"),
+        os.path.join(schema_dir, "schema_document_chunks.sql"),
     ]
     try:
         conn = await asyncpg.connect(dsn)

@@ -95,3 +95,41 @@ def get_presigned_url(
         object_name,
         expires=timedelta(seconds=int(expires_seconds)),
     )
+
+
+def get_presigned_url_for_external(
+    object_name: str,
+    expires_seconds: int = 3600,
+) -> str:
+    """
+    生成供公网访问的预签名 URL（用于 MinerU 等外部服务拉取文件）。
+    当配置了 MINIO_PUBLIC_ENDPOINT（如 ngrok/cloudflared 隧道地址）时，
+    使用该端点生成 URL；未配置则与 get_presigned_url 相同。
+    """
+    public_endpoint = (os.getenv("MINIO_PUBLIC_ENDPOINT") or "").strip()
+    if not public_endpoint:
+        return get_presigned_url(object_name, expires_seconds)
+
+    # 公网端点：支持 "https://xxx.ngrok.io" 或 "xxx.ngrok.io" 或 "xxx.ngrok.io:443"
+    secure = public_endpoint.startswith("https://")
+    if public_endpoint.startswith("https://"):
+        public_endpoint = public_endpoint[len("https://") :].rstrip("/")
+    elif public_endpoint.startswith("http://"):
+        public_endpoint = public_endpoint[len("http://") :].rstrip("/")
+    if not public_endpoint:
+        return get_presigned_url(object_name, expires_seconds)
+
+    access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+    secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+    bucket = _get_bucket()
+    client = Minio(
+        public_endpoint,
+        access_key=access_key,
+        secret_key=secret_key,
+        secure=secure,
+    )
+    return client.presigned_get_object(
+        bucket,
+        object_name,
+        expires=timedelta(seconds=int(expires_seconds)),
+    )

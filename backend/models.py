@@ -46,6 +46,10 @@ class ChatRequest(BaseSchema):
         default=None,
         description="Quick Parse 临时文件列表，仅在当前轮对话中作为工作记忆注入，不写入长期记忆/RAG",
     )
+    rag_context: Optional[str] = Field(
+        default=None,
+        description="RAG 知识库检索结果文本，作为知识库上下文注入到当前轮对话",
+    )
 
 
 class ChatResponse(BaseSchema):

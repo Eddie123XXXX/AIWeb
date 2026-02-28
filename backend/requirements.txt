@@ -1,3 +1,4 @@
+# 后端运行与 RAG/记忆/Quick Parse 所需；复制 .env.example 为 .env 后 pip install -r requirements.txt 即可运行
 setuptools>=65.0.0,<70.0.0
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
@@ -9,6 +10,8 @@ python-dotenv==1.0.0
 sse-starlette==1.8.2
 minio==7.2.9
 redis>=5.0.0
+rq>=1.15.0
+# FlagEmbedding  # 可选：pip install FlagEmbedding 启用本地 BGE-M3 神经稀疏向量
 asyncpg>=0.29.0
 pymilvus>=2.4.0
 marshmallow>=3.13,<4.0
@@ -19,3 +22,4 @@ PyJWT>=2.8.0
 pandas
 pdfplumber
 python-docx
+openpyxl

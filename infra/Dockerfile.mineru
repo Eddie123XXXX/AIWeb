@@ -1,0 +1,31 @@
+# MinerU GPU 推理环境 Docker 镜像
+# 基于官方文档：https://opendatalab.github.io/MinerU/quick_start/docker_deployment/
+
+# 默认：适配 Ampere / Ada Lovelace / Hopper 架构（8.0 <= Compute Capability <= 9.0）
+FROM vllm/vllm-openai:v0.10.1.1
+
+# 如需适配 Volta / Turing / Blackwell（7.0 < Compute Capability < 8.0 或 >= 10.0），
+# 可改为：
+# FROM vllm/vllm-openai:v0.11.0
+
+# 安装中文字体与 OpenCV 依赖
+RUN apt-get update && \
+ apt-get install -y \
+ fonts-noto-core \
+ fonts-noto-cjk \
+ fontconfig \
+ libgl1 && \
+ fc-cache -fv && \
+ apt-get clean && \
+ rm -rf /var/lib/apt/lists/*
+
+# 安装 MinerU
+RUN python3 -m pip install -U 'mineru[core]>=2.7.0' --break-system-packages && \
+ python3 -m pip cache purge
+
+# 预下载模型并更新配置
+RUN /bin/bash -c "mineru-models-download -s huggingface -m all"
+
+# 入口：保证 MINERU_MODEL_SOURCE 使用本地模型
+ENTRYPOINT ["/bin/bash", "-c", "export MINERU_MODEL_SOURCE=local && exec \"$@\"", "--"]
+

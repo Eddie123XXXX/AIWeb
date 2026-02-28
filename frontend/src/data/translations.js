@@ -43,7 +43,7 @@ export const translations = {
   setAsDefault: { zh: '设为默认', en: 'Set as default' },
   aiChat: { zh: 'AI 对话', en: 'AI Chat' },
   knowledgeBase: { zh: '知识库', en: 'Wiki' },
-  ragSearch: { zh: 'RAG 检索', en: 'RAG Search' },
+  ragSearch: { zh: '深度搜索', en: 'Deep Search' },
   apps: { zh: '应用', en: 'Apps' },
   theme: { zh: '切换主题', en: 'Toggle theme' },
 
@@ -129,6 +129,7 @@ export const translations = {
 
   // RAG Search 页
   addKnowledgeSource: { zh: '添加知识源', en: 'Add source' },
+  uploading: { zh: '上传中...', en: 'Uploading' },
   knowledgeSourcesTitle: { zh: '知识源', en: 'Sources' },
   selectAllSources: { zh: '选择所有来源', en: 'Select all sources' },
   searchDocuments: { zh: '检索文档', en: 'Search documents' },
@@ -137,4 +138,15 @@ export const translations = {
   collapseDocPanel: { zh: '收起文档面板', en: 'Collapse doc panel' },
   relevancy: { zh: '相关度', en: 'Relevancy' },
   viewAllReferences: { zh: '查看全部引用', en: 'View all references' },
+  deleteThisSource: { zh: '删除该来源', en: 'Delete this source' },
+  expandFile: { zh: '展开文件', en: 'Expand file' },
+  sourceGuide: { zh: '来源指南', en: 'Source guide' },
+  sourceGuideSummaryEmpty: { zh: '暂无总结', en: 'No summary yet' },
+  sourceGuideGenerating: { zh: '生成中…', en: 'Generating…' },
+  renameNotebook: { zh: '修改标题', en: 'Rename notebook' },
+  deleteNotebook: { zh: '删除笔记本', en: 'Delete notebook' },
+  deleteNotebookConfirm: { zh: '确定要删除该笔记本吗？删除后无法恢复。', en: 'Delete this notebook? This cannot be undone.' },
+  save: { zh: '保存', en: 'Save' },
+  sourcesCount: { zh: '个知识源', en: 'sources' },
 };
+

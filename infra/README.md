@@ -3,6 +3,12 @@
 一条命令，把一整套「个人 AI 数据中心」拉起来。  
 这就是 AIWeb 背后安静工作的 **小型云平台**。😎
 
+## 🔄 实现流程与技术说明
+
+- **启动顺序**：`docker compose -f infra/docker-compose.yml up -d` 按依赖启动（PostgreSQL、Redis、MinIO、Milvus、RabbitMQ、Elasticsearch 等）；MinerU 需 `--profile mineru-api` 单独拉起。
+- **后端对接**：后端通过 `backend/.env` 中的 `*_HOST`、`*_PORT` 等连接上述服务；建表用 `python -m db.run_schema`，RAG 迁移用 `python -m rag.migrate_add_summary`。
+- **技术用途**：PostgreSQL 存用户/会话/消息/记忆/文档与切片；Redis 做会话与缓存；MinIO 存上传文件与 RAG 图片；Milvus 存记忆与 RAG 向量；RabbitMQ/Elasticsearch 预留扩展。
+
 ## 🧰 一键启动
 
 在项目根目录（AIWeb）下执行：
@@ -20,20 +26,67 @@ docker compose -f infra/docker-compose.yml up -d
 
 ## 🌐 服务与端口
 
-| 服务          | 端口        | 说明                          |
-|---------------|-------------|-------------------------------|
-| MinIO         | 9000, 9001  | 对象存储（API / Console）     |
-| Redis         | 6379        | 缓存 / KV 存储                |
-| PostgreSQL    | 5432        | 关系数据库                    |
-| Milvus        | 19530, 9091 | 向量数据库（服务端）          |
-| Attu          | 8000        | Milvus Web 控制台             |
-| RabbitMQ      | 5672, 15672 | 消息队列 / 管理控制台         |
-| RedisInsight  | 5540        | Redis Web 控制台              |
-| pgAdmin       | 5050        | PostgreSQL Web 管理界面       |
-| Elasticsearch | 9200, 9300  | 搜索引擎（服务端）            |
-| Kibana        | 5601        | Elasticsearch Web 控制台      |
+| 服务               | 端口        | 说明                          |
+|--------------------|-------------|-------------------------------|
+| MinIO              | 9000, 9001  | 对象存储（API / Console）     |
+| Redis              | 6379        | 缓存 / KV 存储                |
+| PostgreSQL         | 5432        | 关系数据库                    |
+| Milvus             | 19530, 9091 | 向量数据库（服务端）          |
+| Attu               | 8000        | Milvus Web 控制台             |
+| RabbitMQ           | 5672, 15672 | 消息队列 / 管理控制台         |
+| RedisInsight       | 5540        | Redis Web 控制台              |
+| pgAdmin            | 5050        | PostgreSQL Web 管理界面       |
+| Elasticsearch      | 9200, 9300  | 搜索引擎（服务端）            |
+| Kibana             | 5601        | Elasticsearch Web 控制台      |
+| MinerU Web API     | 9999        | MinerU 文档解析 API（GPU）    |
 
 可以把这张表当成你本地「AI 基础设施机房地图」🗺️。
+
+## ⚙️ MinerU（VLM 解析）GPU / CPU 模式
+
+MinerU 仅以 **Web API 服务（9999 端口）** 的形式整合进 `infra/docker-compose.yml`，默认按 **GPU 模式** 运行（需要 NVIDIA 显卡 + 驱动 + Docker GPU 支持）。
+
+- **构建 + 启动 MinerU 镜像并拉起 API 服务**：
+
+  ```bash
+  # 在 AIWeb 根目录
+  docker compose -f infra/docker-compose.yml --profile mineru-api up -d --build
+  ```
+
+- **后续只需启动 / 重启 API 服务**：
+
+  ```bash
+  docker compose -f infra/docker-compose.yml --profile mineru-api up -d
+  ```
+
+### 🧠 GPU 模式（推荐）
+
+- 在 `infra/docker-compose.yml` 中，`mineru-api` 已配置：
+  - `deploy.resources.reservations.devices`（NVIDIA GPU）
+  - `gpus: all`
+- 启动前请确保：
+  - `nvidia-smi` 在宿主机正常
+  - `docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi` 能跑通
+- 调试日志：
+
+  ```bash
+  docker logs -f mineru-api
+  ```
+
+### 🐢 CPU 模式（仅调试用）
+
+如果暂时没有可用 GPU，或显存不足，可以临时用 CPU 调试（非常慢，不推荐长期使用）：
+
+- 在 `infra/docker-compose.yml` 中，**注释掉或删除** `mineru-api` 里的：
+  - `deploy.resources.reservations.devices` 整块
+  - `gpus: all`
+- 然后重新启动：
+
+  ```bash
+  docker compose -f infra/docker-compose.yml --profile mineru-api up -d --build
+  ```
+
+CPU 模式下 MinerU 的 VLM 推理会大量占用 CPU，请只在必要时短暂使用。
 
 ## ⚙️ 环境变量（后端 .env）
 

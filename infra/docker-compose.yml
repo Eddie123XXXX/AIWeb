@@ -145,6 +145,35 @@ services:
     depends_on:
       - elasticsearch
 
+  # ========= MinerU =========
+  mineru-api:
+    image: mineru:latest
+    container_name: mineru-api
+    restart: always
+    profiles: ["mineru-api"]
+    ports:
+      - "9999:8000"
+    environment:
+      MINERU_MODEL_SOURCE: local
+    entrypoint: mineru-api
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    gpus: all
+
 volumes:
   minio_data:
   redis_data:

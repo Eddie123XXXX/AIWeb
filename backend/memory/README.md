@@ -5,6 +5,15 @@ Agent 的「长期记忆 + 反思」模块，为对话模式提供分层记忆�
 
 适合存储：用户偏好、关键决策、长期项目背景等「下次再聊还想记得住」的内容。📒
 
+## 🔄 技术流程概览
+
+- **写入**：对话落库后异步调用 `extract_and_store_memories_for_round` → DeepSeek 打分(importance、domain、extracted_fact) → 高分(≥0.7)双写 PostgreSQL(agent_memories) + Milvus(向量+domain)。
+- **召回**：用户新输入 → `get_intent_domains` 领域分类 → `retrieve_relevant_memories`：Milvus 语义粗筛 + domain 过滤 → PostgreSQL 取 importance/last_accessed → 时间衰减与精排公式 S_final = α·S_semantic + β·S_time_decay + γ·S_importance → Touch 更新 last_accessed。
+- **反思**：写入 fact 后异步检查近期 importance 累加与冷却 → 达阈值则 LLM 生成 reflection，被总结的 fact 向量从 Milvus 删除。
+- **遗忘**：定时调用 `cleanup_forgotten_memories`，按艾宾浩斯保持率软删除低保持率记忆（reflection 不参与）。
+
+接入点：`routers/chat.py` 拼 prompt 前调用 `get_memory_context_for_prompt`；`services/chat_context.py` 的 `persist_round` 中异步触发写入与反思。
+
 ## 📁 目录结构
 
 ```

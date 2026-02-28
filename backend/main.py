@@ -15,6 +15,15 @@ if not _mem_log.handlers:
     _h = logging.StreamHandler(sys.stdout)
     _h.setFormatter(logging.Formatter("%(message)s"))
     _mem_log.addHandler(_h)
+
+# 配置 RAG 模块日志，确保 [RAG] 解析/切块/向量化过程输出到终端
+for _name in ("rag.router", "rag.service", "rag.tasks"):
+    _rag_log = logging.getLogger(_name)
+    _rag_log.setLevel(logging.INFO)
+    if not _rag_log.handlers:
+        _h = logging.StreamHandler(sys.stdout)
+        _h.setFormatter(logging.Formatter("%(message)s"))
+        _rag_log.addHandler(_h)
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -33,6 +42,7 @@ from infra.redis import router as redis_router
 from infra.postgres import router as postgres_router
 from infra.rabbitmq import router as rabbitmq_router
 from infra.elasticsearch import router as es_router
+from infra.mineru.router import router as mineru_router
 
 # Milvus 依赖 pymilvus，在 uvicorn --reload 子进程中可能缺少 pkg_resources，改为可选加载
 try:
@@ -40,6 +50,13 @@ try:
 except Exception as e:
     milvus_router = None
     print(f"⚠️ Milvus 路由未加载（可忽略）: {e}")
+
+# RAG 知识库模块
+try:
+    from rag import router as rag_router
+except Exception as e:
+    rag_router = None
+    print(f"⚠️ RAG 路由未加载（可忽略）: {e}")
 
 
 @asynccontextmanager
@@ -60,29 +77,29 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI 聊天平台 🧠",
     description="""
-欢迎来到 AIWeb 的后端 API。这里是多模型对话、长期记忆、RAG 和 Quick Parse 背后的「控制中心」。🚀
+欢迎来到 AIWeb 的后端 API。多模型对话、长期记忆、RAG 知识库与 Quick Parse 均由本服务统一编排。
 
 ## 功能特性
 
-- 🤖 支持多种 LLM 提供商（OpenAI、Anthropic、DeepSeek、通义千问、Moonshot、智谱等）
-- 🔑 灵活的 API Key 管理
-- 💬 流式 / 非流式对话
-- 🧠 长期记忆模块（Milvus + PostgreSQL）
-- 📎 Quick Parse 文件解析（MinIO + 长上下文模型）
-- 🔌 OpenAI 兼容接口设计（/api/chat, /api/models）
+- 🤖 多模型：OpenAI、Anthropic、DeepSeek、通义千问、Moonshot、智谱等（OpenAI 兼容）
+- 💬 流式/非流式对话：WebSocket `/api/chat/ws`，支持 conversation_id、rag_context、quick_parse_files
+- 🧠 长期记忆：打分写入、三维混合召回（语义+时间衰减+重要性）、反思与遗忘（见 memory 模块）
+- 📎 Quick Parse：MinIO 上传，解析为 Markdown 仅注入当轮上下文，不写入记忆/知识库
+- 📚 RAG 知识库：上传→解析→版面感知切块→Dense+Sparse 向量化→三段式检索；`/api/rag/search` 支持 document_ids 限定范围；文档总结（来源指南）入库，大文档截断后生成
 
-## 进度概览
+## 实现流程概览
 
-- ✅ 对话历史持久化
-- ✅ 长期记忆与混合召回（memory）
-- ✅ 文件上传与 Quick Parse 解析
-- ⏳ 知识库 RAG 工作流（进行中）
-- ⏳ 用户系统与使用统计（规划中）
+1. **对话**：前端 WebSocket 发消息 → 解析会话与历史（Redis/PostgreSQL）→ 记忆召回 + 可选 RAG 上下文 + Quick Parse 内容拼入 system → LLM 流式返回 → 落库并异步写入记忆。
+2. **RAG 检索**：`POST /api/rag/search` 三路召回（精确+FTS、Sparse、Dense）→ RRF 融合 → Reranker 精排 → Parent-Child 溯源返回；前端可将结果注入下次对话的 rag_context。
+3. **文档入库**：`POST /api/rag/documents/upload` 防重/秒传 → `POST /api/rag/documents/{id}/process` 解析→切块→向量化；`GET /api/rag/documents/{id}/markdown` 返回片段与来源指南（无则生成并入库）。
 
-你可以：
+## 技术栈
 
-- 直接在 Swagger 里试用接口；
-- 把本服务当成「自托管的 OpenAI 兼容后端」接到自己的前端里。😄
+- FastAPI、WebSocket、OpenAPI/Swagger
+- PostgreSQL（用户/会话/消息/记忆/文档与切片）、Redis（缓存/会话）、MinIO（对象）、Milvus（向量）
+- 详见各模块 README：`backend/README.md`、`backend/rag/README.md`、`backend/memory/README.md`
+
+在 Swagger 中可直接调试各接口；也可将本服务作为自托管 OpenAI 兼容后端使用。
     """,
     version="1.0.0",
     lifespan=lifespan
@@ -122,6 +139,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://192.168.3.38:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],
@@ -143,6 +161,22 @@ if milvus_router is not None:
     app.include_router(milvus_router, prefix="/api")
 app.include_router(rabbitmq_router, prefix="/api")
 app.include_router(es_router, prefix="/api")
+app.include_router(mineru_router, prefix="/api")
+if rag_router is not None:
+    app.include_router(rag_router, prefix="/api")
+else:
+    # RAG 模块未加载时的后备路由，避免前端 404
+    @app.get("/api/rag/notebooks", tags=["rag"])
+    async def _rag_notebooks_fallback():
+        return []
+
+    @app.post("/api/rag/notebooks", tags=["rag"])
+    async def _rag_create_notebook_fallback():
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "RAG 模块未加载，请检查后端日志（notebooks 表、依赖等）并重启后端"},
+        )
 
 
 @app.get("/", tags=["root"])

@@ -110,7 +110,7 @@ export function useChat(conversationId = null, options = {}) {
   }, []);
 
   const sendMessage = useCallback(
-    async (text, modelId = DEFAULT_MODEL_ID, conversationIdOverride = null, quickParseFiles = null) => {
+    async (text, modelId = DEFAULT_MODEL_ID, conversationIdOverride = null, quickParseFiles = null, ragContext = null) => {
       const trimmed = text?.trim();
       if (!trimmed || isStreaming) return;
 
@@ -160,6 +160,9 @@ export function useChat(conversationId = null, options = {}) {
             mime_type: f.mime_type,
             size: f.size,
           }));
+        }
+        if (ragContext && typeof ragContext === 'string' && ragContext.trim()) {
+          payload.rag_context = ragContext.trim();
         }
         ws.send(JSON.stringify(payload));
       } catch (err) {
