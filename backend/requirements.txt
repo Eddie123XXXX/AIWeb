@@ -1,4 +1,9 @@
 # 后端运行与 RAG/记忆/Quick Parse 所需；复制 .env.example 为 .env 后 pip install -r requirements.txt 即可运行
+#
+# 以下为系统/外部依赖（非 pip 包），需在本机或运行环境中单独安装：
+#   - ffmpeg  用于语音识别（ASR）：浏览器上传 webm 时由 pydub 转成 MP3 再调用 Qwen3-ASR-Flash
+#   - ngrok   可选，用于将本机后端暴露到公网（调试、移动端访问、Webhook 等）
+#
 setuptools>=65.0.0,<70.0.0
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
@@ -23,3 +28,4 @@ pandas
 pdfplumber
 python-docx
 openpyxl
+pydub

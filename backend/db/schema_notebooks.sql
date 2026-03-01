@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS notebooks (
     id              VARCHAR(36)     NOT NULL,
     title           VARCHAR(255)   NOT NULL DEFAULT '未命名笔记本',
     user_id         BIGINT          NOT NULL,
+    emoji           VARCHAR(32)     NULL,
 
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -22,3 +23,4 @@ COMMENT ON TABLE notebooks IS 'RAG 知识库笔记本表';
 COMMENT ON COLUMN notebooks.id IS '笔记本主键 UUID';
 COMMENT ON COLUMN notebooks.title IS '笔记本标题';
 COMMENT ON COLUMN notebooks.user_id IS '所属用户';
+COMMENT ON COLUMN notebooks.emoji IS '笔记本图标 emoji（由名称生成，可刷新更新）';

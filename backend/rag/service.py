@@ -12,6 +12,11 @@ RAG 核心业务服务
 """
 from __future__ import annotations
 
+
+class DocumentAlreadyInNotebookError(Exception):
+    """同笔记本内重复上传同一文件时抛出，供路由返回 409"""
+    pass
+
 import asyncio
 import base64
 import hashlib
@@ -697,7 +702,7 @@ async def upload_document(
     existing = await document_repository.find_by_notebook_and_hash(notebook_id, file_hash)
     if existing:
         logger.info(f"[RAG] 文档已存在 (同笔记本防重): {existing.get('id')}")
-        return existing
+        raise DocumentAlreadyInNotebookError("该文件已存在于本笔记本中，请勿重复上传")
 
     doc_id = str(uuid.uuid4())
     storage_path = f"rag/{notebook_id}/{doc_id}/{filename}"
@@ -1421,6 +1426,60 @@ def _get_summary_client() -> AsyncOpenAI | None:
 
 def _get_summary_model() -> str:
     return os.getenv("RAG_SUMMARY_MODEL", "deepseek-chat")
+
+
+# 笔记本名称 → emoji 关键词兜底（与前端 EMOJI_RULES 一致）
+_EMOJI_FALLBACK_RULES = [
+    (re.compile(r"报告|分析|数据|统计|调研|研究"), "📊"),
+    (re.compile(r"技术|代码|开发|编程|AI|人工智能"), "💻"),
+    (re.compile(r"财务|金额|预算|投资|收入|成本"), "💰"),
+    (re.compile(r"法律|合同|条款|法规"), "⚖️"),
+    (re.compile(r"教育|学习|课程|培训"), "📚"),
+    (re.compile(r"医疗|健康|医学|临床"), "🏥"),
+    (re.compile(r"产品|设计|需求|方案"), "📋"),
+    (re.compile(r"市场|营销|销售|客户"), "📈"),
+    (re.compile(r"会议|纪要|记录"), "📝"),
+    (re.compile(r"人工智能|AI|机器学习|深度学习"), "🤖"),
+]
+
+
+def _emoji_fallback_from_title(title: str) -> str:
+    """根据名称关键词返回兜底 emoji"""
+    if not title or not isinstance(title, str):
+        return "📄"
+    s = title.strip().lower()
+    for pattern, emoji in _EMOJI_FALLBACK_RULES:
+        if pattern.search(s):
+            return emoji
+    return "📄"
+
+
+async def get_emoji_for_title(title: str) -> str:
+    """
+    根据笔记本名称用 DeepSeek 生成一个 emoji；召回失败则用关键词兜底。
+    """
+    if not title or not isinstance(title, str) or not title.strip():
+        return "📄"
+    client = _get_summary_client()
+    if not client:
+        return _emoji_fallback_from_title(title)
+    prompt = (
+        "根据以下笔记本名称，生成一个最贴切的 emoji，只回复一个 emoji 字符，不要任何其他文字、标点或解释。\n"
+        "名称：" + (title.strip()[:200])
+    )
+    try:
+        resp = await client.chat.completions.create(
+            model=_get_summary_model(),
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=10,
+            temperature=0.3,
+        )
+        content = (resp.choices[0].message.content or "").strip()
+        if content and len(content) <= 12:
+            return content
+    except Exception as e:
+        logger.warning("RAG emoji from title (DeepSeek) failed, using fallback: %s", e)
+    return _emoji_fallback_from_title(title)
 
 
 def _build_summary_input(segments: list[dict[str, Any]], max_chars: int) -> str:

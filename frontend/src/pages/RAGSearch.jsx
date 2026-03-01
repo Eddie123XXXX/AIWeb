@@ -6,6 +6,7 @@ import { useTranslation } from '../context/LocaleContext';
 import { LanguageDropdown } from '../components/LanguageDropdown';
 import { Chat } from '../components/Chat';
 import { InputArea } from '../components/InputArea';
+import { SnakeGame } from '../components/SnakeGame';
 import { ProviderLogo } from '../components/ProviderLogo';
 import { useChat } from '../hooks/useChat';
 import { ragSearch, listRAGDocuments, buildRAGContextFromHits, uploadRAGDocument, processRAGDocument, deleteRAGDocument, getDocumentMarkdown, DEFAULT_NOTEBOOK_ID } from '../utils/ragApi';
@@ -28,7 +29,7 @@ function ensureImageUrlsInContent(text) {
     .join('\n');
 }
 
-export function RAGSearch({ models, currentModel, defaultModelId, onModelChange, onLogout, onOpenProfile }) {
+export function RAGSearch({ models, currentModel, defaultModelId, onModelChange, onLogout, onOpenProfile, onOpenMemoryManage }) {
   const t = useTranslation();
   const user = getStoredUser();
   const displayName = user?.nickname || user?.username || user?.email || t('user');
@@ -57,6 +58,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
   const [sourceMenuId, setSourceMenuId] = useState(null);
   const [hasSearchedForRefs, setHasSearchedForRefs] = useState(false);
   const [expandDoc, setExpandDoc] = useState({ docId: null, filename: '', segments: [], summary: '', loading: false, chunkId: null, chunkSnippet: null });
+  const [parsingWaitDocId, setParsingWaitDocId] = useState(null);
   const fileInputRef = useRef(null);
   const sourceMenuRef = useRef(null);
   const expandDocContentRef = useRef(null);
@@ -90,18 +92,40 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
       e.target.value = '';
       if (!file || uploading) return;
       setUploading(true);
+      let doc;
       try {
-        const doc = await uploadRAGDocument({ file, notebook_id: notebookId });
-        await processRAGDocument(doc.id);
-        await loadSources();
+        doc = await uploadRAGDocument({ file, notebook_id: notebookId });
       } catch (err) {
         console.error('上传失败:', err);
-        alert(err?.message || '上传失败');
-      } finally {
+        const msg = err?.message || '';
+        const status = err?.status;
+        let tip = msg;
+        if (status === 409 || (msg && (msg.includes('已存在') || msg.includes('already exists')))) {
+          tip = t('uploadDuplicate');
+        } else if (status === 400 && msg && (msg.includes('不支持') || msg.includes('Unsupported') || msg.includes('不支持的文件类型'))) {
+          const supportedPart = msg.includes('支持:') ? msg.split('支持:')[1]?.trim() : (msg.includes('Supported:') ? msg.split('Supported:')[1]?.trim() : '');
+          tip = t('uploadUnsupportedFormat') + (supportedPart ? `\n${t('uploadSupportedFormats')}${supportedPart}` : '');
+        } else if (!tip) {
+          tip = t('uploadFailed');
+        }
+        alert(tip);
         setUploading(false);
+        return;
       }
+      setUploading(false);
+      setSources((prev) => [
+        ...prev,
+        { id: doc.id, label: doc.filename, checked: true, status: doc.status || 'UPLOADED' },
+      ]);
+      processRAGDocument(doc.id)
+        .then(() => loadSources())
+        .catch((err) => {
+          console.error('解析失败:', err);
+          loadSources();
+          alert(err?.message || t('parseFailed') || '解析失败');
+        });
     },
-    [notebookId, uploading, loadSources]
+    [notebookId, uploading, loadSources, t]
   );
 
   useEffect(() => {
@@ -384,8 +408,16 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
           {sources.map((s) => (
             <div
               key={s.id}
-              className={`rag-source-item-row${s.checked ? ' is-active' : ''}`}
+              className={`rag-source-item-row${s.checked ? ' is-active' : ''}${s.status !== 'READY' ? ' rag-source-item-row--parsing' : ''}`}
               ref={sourceMenuId === s.id ? sourceMenuRef : null}
+              onClick={(e) => {
+                if (s.status !== 'READY' && !e.target.closest('input[type="checkbox"]') && !e.target.closest('.rag-source-item__more') && !e.target.closest('.rag-source-menu')) {
+                  setParsingWaitDocId(s.id);
+                }
+              }}
+              role={s.status !== 'READY' ? 'button' : undefined}
+              tabIndex={s.status !== 'READY' ? 0 : undefined}
+              onKeyDown={s.status !== 'READY' ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setParsingWaitDocId(s.id); } } : undefined}
             >
               <label className="rag-source-item">
                 <input
@@ -397,6 +429,11 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                 <span className="material-symbols-outlined rag-source-item__icon">description</span>
                 <span className="rag-source-item__label" style={{ fontWeight: s.checked ? 600 : 500 }} title={s.label}>{s.label}</span>
               </label>
+              {s.status !== 'READY' && (
+                <span className="rag-source-item__parsing-spinner" title={t('parsing') || '解析中'} aria-hidden>
+                  <span className="material-symbols-outlined rag-source-item__parsing-spinner-icon">progress_activity</span>
+                </span>
+              )}
               <button
                 type="button"
                 className="rag-source-item__more"
@@ -487,6 +524,20 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
                   </span>
                   <span>{t('profile')}</span>
                 </button>
+                <button
+                  type="button"
+                  className="sidebar__user-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    onOpenMemoryManage?.();
+                  }}
+                >
+                  <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
+                    psychology
+                  </span>
+                  <span>{t('memoryManage')}</span>
+                </button>
                 <button type="button" className="sidebar__user-menu-item" role="menuitem">
                   <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
                     credit_card
@@ -512,6 +563,32 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
           </div>
         </div>
       </aside>
+      {parsingWaitDocId != null && (
+        <div
+          className="profile-modal-overlay parsing-wait-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="parsing-wait-title"
+        >
+          <div className="profile-modal-backdrop" onClick={() => setParsingWaitDocId(null)} />
+          <div className="profile-modal-panel parsing-wait-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="profile-modal-head">
+              <h2 id="parsing-wait-title" className="profile-modal-title">{t('parsingWaitTitle')}</h2>
+              <button
+                type="button"
+                className="profile-modal-close"
+                aria-label={t('cancel')}
+                onClick={() => setParsingWaitDocId(null)}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <p className="parsing-wait-desc">{t('parsingWaitDesc')}</p>
+            <SnakeGame onClose={() => setParsingWaitDocId(null)} t={t} />
+          </div>
+        </div>
+      )}
+
       {showLogoutConfirm && (
         <div
           className="logout-confirm-overlay"
@@ -740,11 +817,7 @@ export function RAGSearch({ models, currentModel, defaultModelId, onModelChange,
           </div>
         </div>
         <div className="rag-right-sidebar__body">
-          {retrievedDocs.length === 0 && !hasSearchedForRefs ? null : retrievedDocs.length === 0 ? (
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-charcoal-light)', padding: '1rem' }}>
-              {t('noReferencesYet') || '发送问题后，检索到的文档将显示在此'}
-            </p>
-          ) : (
+          {retrievedDocs.length === 0 ? null : (
             retrievedDocs.map((d) => (
               <div key={d.id} className="rag-doc-card">
                 <div className="rag-doc-card__from">

@@ -13,6 +13,7 @@ import { Register } from './pages/Register';
 import { RAGDashboard } from './pages/RAGDashboard';
 import { RAGSearch } from './pages/RAGSearch';
 import { Profile } from './pages/Profile';
+import { MemoryManageModal } from './components/MemoryManageModal';
 import { useTheme } from './hooks/useTheme';
 import { useChat } from './hooks/useChat';
 import { useTranslation } from './context/LocaleContext';
@@ -88,8 +89,9 @@ export function App() {
       : null
   );
 
-  // 个人中心弹窗（不占用路由）
+  // 个人中心 / 记忆管理弹窗（不占用路由）
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [memoryModalOpen, setMemoryModalOpen] = useState(false);
 
   // 用 state 存 token，登录成功后 setToken 触发重渲染，才能正确从登录页跳转到首页
   const [token, setTokenState] = useState(() => getStoredToken());
@@ -505,6 +507,7 @@ export function App() {
         onNewChat={handleNewChat}
         onLogout={() => setToken(null)}
         onOpenProfile={() => setProfileModalOpen(true)}
+        onOpenMemoryManage={() => setMemoryModalOpen(true)}
         conversations={conversations}
         currentConversationId={conversationId}
         onSelectConversation={handleSelectConversation}
@@ -580,6 +583,7 @@ export function App() {
                 onModelChange={handleModelChange}
                 onLogout={() => setToken(null)}
                 onOpenProfile={() => setProfileModalOpen(true)}
+                onOpenMemoryManage={() => setMemoryModalOpen(true)}
               />
             )
           }
@@ -600,6 +604,9 @@ export function App() {
             <Profile onClose={() => setProfileModalOpen(false)} />
           </div>
         </div>
+      )}
+      {token && memoryModalOpen && (
+        <MemoryManageModal onClose={() => setMemoryModalOpen(false)} />
       )}
     </BrowserRouter>
   );

@@ -5,8 +5,8 @@
 
 ## 🔄 实现流程与技术说明
 
-- **启动顺序**：`docker compose -f infra/docker-compose.yml up -d` 按依赖启动（PostgreSQL、Redis、MinIO、Milvus、RabbitMQ、Elasticsearch 等）；MinerU 需 `--profile mineru-api` 单独拉起。
-- **后端对接**：后端通过 `backend/.env` 中的 `*_HOST`、`*_PORT` 等连接上述服务；建表用 `python -m db.run_schema`，RAG 迁移用 `python -m rag.migrate_add_summary`。
+- **启动顺序**：在 **AIWeb 项目根目录** 执行 `docker compose -f infra/docker-compose.yml up -d` 按依赖启动（PostgreSQL、Redis、MinIO、Milvus、RabbitMQ、Elasticsearch 等）；MinerU 需 `--profile mineru-api` 单独拉起。
+- **后端对接**：后端通过 `backend/.env` 中的 `*_HOST`、`*_PORT` 等连接上述服务；建表用 `python -m db.run_schema`，RAG 迁移用 `python -m rag.migrate_add_summary`；若 notebooks 表已存在且无 emoji 列，可执行 `python -m db.migrate_notebooks_emoji`。
 - **技术用途**：PostgreSQL 存用户/会话/消息/记忆/文档与切片；Redis 做会话与缓存；MinIO 存上传文件与 RAG 图片；Milvus 存记忆与 RAG 向量；RabbitMQ/Elasticsearch 预留扩展。
 
 ## 🧰 一键启动

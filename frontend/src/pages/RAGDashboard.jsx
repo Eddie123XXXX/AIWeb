@@ -4,16 +4,65 @@ import { useTheme } from '../hooks/useTheme';
 import { useTranslation } from '../context/LocaleContext';
 import { LanguageDropdown } from '../components/LanguageDropdown';
 import { getStoredUser } from '../utils/auth';
-import { listNotebooks, createNotebook, updateNotebook, deleteNotebook } from '../utils/ragApi';
+import { listNotebooks, createNotebook, updateNotebook, deleteNotebook, getEmojiForTitle, saveNotebookEmoji } from '../utils/ragApi';
 import logoImg from '../../img/Ling_Flowing_Logo.png';
 import logoImgDark from '../../img/Image.png';
 
-const ICON_PRESETS = [
-  { icon: 'query_stats', iconBg: 'rgba(59, 130, 246, 0.15)', iconColor: '#60a5fa' },
-  { icon: 'bolt', iconBg: 'rgba(168, 85, 247, 0.15)', iconColor: '#a78bfa' },
-  { icon: 'shield_lock', iconBg: 'rgba(16, 185, 129, 0.15)', iconColor: '#34d399' },
-  { icon: 'school', iconBg: 'rgba(245, 158, 11, 0.15)', iconColor: '#fbbf24' },
+const MAX_TITLE_CHARS = 15;
+
+/** 格式化为仅年月日 YYYY-MM-DD */
+function formatDateOnly(createdAt) {
+  if (!createdAt) return '';
+  const d = typeof createdAt === 'string' ? new Date(createdAt) : createdAt;
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** 根据来源指南摘要生成展示标题，最多 15 字 */
+function summaryToTitle(summary) {
+  if (!summary || typeof summary !== 'string') return '';
+  const text = summary.replace(/\s+/g, ' ').trim();
+  const len = [...text].length;
+  if (len <= MAX_TITLE_CHARS) return text;
+  return [...text].slice(0, MAX_TITLE_CHARS).join('') + '…';
+}
+
+const EMOJI_RULES = [
+  [/报告|分析|数据|统计|调研|研究/, '📊'],
+  [/技术|代码|开发|编程|AI|人工智能/, '💻'],
+  [/财务|金额|预算|投资|收入|成本/, '💰'],
+  [/法律|合同|条款|法规/, '⚖️'],
+  [/教育|学习|课程|培训/, '📚'],
+  [/医疗|健康|医学|临床/, '🏥'],
+  [/产品|设计|需求|方案/, '📋'],
+  [/市场|营销|销售|客户/, '📈'],
+  [/会议|纪要|记录/, '📝'],
+  [/人工智能|AI|机器学习|深度学习/, '🤖'],
 ];
+
+/** 根据来源指南摘要匹配一个 emoji（用于未重命名时展示标题生成） */
+function summaryToEmoji(summary) {
+  if (!summary || typeof summary !== 'string') return null;
+  const s = summary.toLowerCase();
+  for (const [re, emoji] of EMOJI_RULES) {
+    if (re.test(s)) return emoji;
+  }
+  return '📄';
+}
+
+/** 根据笔记本名称匹配一个 emoji，名字变化（含重命名）后重新生成 */
+function titleToEmoji(title) {
+  if (!title || typeof title !== 'string') return '📄';
+  const s = title.trim().toLowerCase();
+  if (!s) return '📄';
+  for (const [re, emoji] of EMOJI_RULES) {
+    if (re.test(s)) return emoji;
+  }
+  return '📄';
+}
 
 export function RAGDashboard() {
   const t = useTranslation();
@@ -32,7 +81,47 @@ export function RAGDashboard() {
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameInput, setRenameInput] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [notebookEmojis, setNotebookEmojis] = useState({});
   const notebookMenuRef = useRef(null);
+
+  const getDisplayTitle = useCallback((n) => {
+    const defaultTitle = '未命名笔记本';
+    const hasSummary = n.first_doc_summary && (n.source_count ?? 0) > 0;
+    const isUnrenamed = !n.title || n.title.trim() === '' || n.title === defaultTitle;
+    return (isUnrenamed && hasSummary)
+      ? (summaryToTitle(n.first_doc_summary) || n.title || defaultTitle)
+      : (n.title || defaultTitle);
+  }, []);
+
+  useEffect(() => {
+    if (!notebooks.length) {
+      setNotebookEmojis({});
+      return;
+    }
+    const needFetch = notebooks.filter((n) => !n.emoji || n.emoji.trim() === '');
+    if (needFetch.length === 0) return;
+    let cancelled = false;
+    const pairs = needFetch.map((n) => ({ id: n.id, displayTitle: getDisplayTitle(n) }));
+    Promise.all(
+      pairs.map(({ id, displayTitle }) =>
+        getEmojiForTitle(displayTitle)
+          .then((emoji) =>
+            saveNotebookEmoji(id, emoji)
+              .then(() => ({ id, emoji }))
+              .catch(() => ({ id, emoji }))
+          )
+          .catch(() => ({ id, emoji: titleToEmoji(displayTitle) }))
+      )
+    ).then((results) => {
+      if (!cancelled) {
+        setNotebookEmojis((prev) => ({
+          ...prev,
+          ...Object.fromEntries(results.map((r) => [r.id, r.emoji])),
+        }));
+      }
+    });
+    return () => { cancelled = true; };
+  }, [notebooks, getDisplayTitle]);
 
   const loadNotebooks = useCallback(async () => {
     setLoading(true);
@@ -237,8 +326,14 @@ export function RAGDashboard() {
                 <span className="rag-notebook-card__title">{creating ? (t('creating') || '创建中...') : t('newNotebook')}</span>
                 <span className="welcome__subtitle" style={{ fontSize: '0.875rem', marginTop: 0 }}>{t('startFromNewSource')}</span>
               </button>
-              {!loading && notebooks.map((n, idx) => {
-                  const preset = ICON_PRESETS[idx % ICON_PRESETS.length];
+              {!loading && notebooks.map((n) => {
+                  const hasSummary = n.first_doc_summary && (n.source_count ?? 0) > 0;
+                  const defaultTitle = '未命名笔记本';
+                  const isUnrenamed = !n.title || n.title.trim() === '' || n.title === defaultTitle;
+                  const displayTitle = (isUnrenamed && hasSummary)
+                    ? (summaryToTitle(n.first_doc_summary) || n.title || defaultTitle)
+                    : (n.title || defaultTitle);
+                  const emoji = (n.emoji?.trim() || notebookEmojis[n.id]) ?? titleToEmoji(displayTitle);
                   return (
                     <div
                       key={n.id}
@@ -252,14 +347,11 @@ export function RAGDashboard() {
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/wiki/search?notebook_id=${n.id}`); } }}
-                        aria-label={n.title || t('newNotebook')}
+                        aria-label={displayTitle}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'auto' }}>
-                          <div
-                            className="rag-notebook-card__icon-wrap"
-                            style={{ background: preset.iconBg, border: `1px solid ${preset.iconColor}40` }}
-                          >
-                            <span className="material-symbols-outlined" style={{ color: preset.iconColor, fontSize: 24 }}>{preset.icon}</span>
+                          <div className="rag-notebook-card__icon-wrap rag-notebook-card__icon-wrap--emoji">
+                            <span className="rag-notebook-card__emoji" aria-hidden>{emoji}</span>
                           </div>
                           <button
                             type="button"
@@ -277,8 +369,13 @@ export function RAGDashboard() {
                             <span className="material-symbols-outlined">more_vert</span>
                           </button>
                         </div>
-                        <h3 className="rag-notebook-card__title">{n.title || '未命名笔记本'}</h3>
+                        <h3 className="rag-notebook-card__title">{displayTitle}</h3>
                         <div className="rag-notebook-card__meta">
+                          {n.created_at && (
+                            <span className="rag-notebook-card__meta-date">
+                              {formatDateOnly(n.created_at)}
+                            </span>
+                          )}
                           <span style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
                             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>article</span>
                             {n.source_count ?? 0} {t('sourcesCount') || '个知识源'}

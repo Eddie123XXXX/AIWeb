@@ -1,10 +1,16 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from '../context/LocaleContext';
+import { apiUrl } from '../utils/api';
+import { getAuthHeaders } from '../utils/auth';
 import pdfIcon from '../../img/file type icon/PDF (1).png';
 import wordIcon from '../../img/file type icon/DOCX.png';
 import sheetIcon from '../../img/file type icon/XLS.png';
 import textIcon from '../../img/file type icon/DOCX.png';
 import genericFileIcon from '../../img/file type icon/DOCX.png';
+
+const SpeechRecognitionAPI =
+  typeof window !== 'undefined' &&
+  (window.SpeechRecognition || window.webkitSpeechRecognition);
 
 export function InputArea({
   onSend,
@@ -20,17 +26,26 @@ export function InputArea({
 }) {
   const t = useTranslation();
   const [value, setValue] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [voiceTranscribing, setVoiceTranscribing] = useState(false);
+  const [voiceError, setVoiceError] = useState(null);
   const textareaRef = useRef(null);
   const moreRef = useRef(null);
   const fileInputRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const streamRef = useRef(null);
+  const chunksRef = useRef([]);
   const [enteringFixed, setEnteringFixed] = useState(false);
 
   const handleSubmit = useCallback(() => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    onSend(trimmed);
+    const text = (value + (interimTranscript || '')).trim();
+    if (!text) return;
+    onSend(text);
     setValue('');
-  }, [value, onSend]);
+    setInterimTranscript('');
+  }, [value, interimTranscript, onSend]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -63,6 +78,156 @@ export function InputArea({
     // 允许选择同一个文件多次
     e.target.value = '';
   };
+
+  // 语音识别：浏览器支持则用 Web Speech API 实时转写；否则用录音上传 Qwen ASR
+  const toggleVoiceInput = useCallback(() => {
+    if (isStreaming) return;
+    setVoiceError(null);
+
+    // 麦克风必须在「安全上下文」下使用：仅 https 或 http://localhost / 127.0.0.1
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      setVoiceError(t('voiceInsecureContext'));
+      return;
+    }
+
+    if (SpeechRecognitionAPI) {
+      // 浏览器原生语音识别
+      if (isListening) {
+        if (recognitionRef.current) recognitionRef.current.stop();
+        setIsListening(false);
+        setInterimTranscript('');
+        return;
+      }
+      try {
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = document.documentElement.lang === 'en' ? 'en-US' : 'zh-CN';
+        recognition.onresult = (event) => {
+          let finalText = '';
+          let interimText = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) finalText += transcript;
+            else interimText += transcript;
+          }
+          if (finalText) setValue((prev) => (prev ? `${prev} ${finalText}` : finalText));
+          setInterimTranscript(interimText || '');
+        };
+        recognition.onend = () => {
+          setIsListening(false);
+          setInterimTranscript('');
+        };
+        recognition.onerror = (event) => {
+          if (event.error === 'not-allowed') setVoiceError(t('voicePermissionDenied'));
+          setIsListening(false);
+          setInterimTranscript('');
+        };
+        recognitionRef.current = recognition;
+        recognition.start();
+        setIsListening(true);
+      } catch (err) {
+        setVoiceError(t('voiceUnsupported'));
+        setIsListening(false);
+      }
+      return;
+    }
+
+    // 浏览器不支持：录音上传，后端 Qwen3-ASR-Flash 转写
+    if (isListening || voiceTranscribing) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      return;
+    }
+
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        streamRef.current = stream;
+        chunksRef.current = [];
+        const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+        const recorder = new MediaRecorder(stream, { mimeType: mime });
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunksRef.current.push(e.data);
+        };
+        recorder.onstop = async () => {
+          stream.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+          mediaRecorderRef.current = null;
+          setIsListening(false);
+          if (chunksRef.current.length === 0) {
+            setVoiceError(t('voiceUnsupported'));
+            return;
+          }
+          const blob = new Blob(chunksRef.current, { type: mime });
+          setVoiceTranscribing(true);
+          try {
+            const formData = new FormData();
+            formData.append('audio', blob, 'recording.webm');
+            const resp = await fetch(apiUrl('/api/asr/transcribe'), {
+              method: 'POST',
+              headers: { ...getAuthHeaders() },
+              body: formData,
+            });
+            if (!resp.ok) {
+              const err = await resp.json().catch(() => ({}));
+              setVoiceError(err.detail || t('voiceUnsupported'));
+              return;
+            }
+            const data = await resp.json();
+            const text = (data.text || '').trim();
+            if (text) setValue((prev) => (prev ? `${prev} ${text}` : text));
+          } catch (err) {
+            setVoiceError(err?.message || t('voiceUnsupported'));
+          } finally {
+            setVoiceTranscribing(false);
+          }
+        };
+        recorder.onerror = () => {
+          setVoiceError(t('voiceUnsupported'));
+          setIsListening(false);
+          stream.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        };
+        mediaRecorderRef.current = recorder;
+        recorder.start();
+        setIsListening(true);
+      })
+      .catch(() => {
+        setVoiceError(
+          typeof window !== 'undefined' && !window.isSecureContext
+            ? t('voiceInsecureContext')
+            : t('voicePermissionDenied')
+        );
+      });
+  }, [isListening, isStreaming, voiceTranscribing, t]);
+
+  // 组件卸载时释放语音识别 / 录音资源
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (_) {}
+        recognitionRef.current = null;
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch (_) {}
+        mediaRecorderRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
 
   // 让“更多选项”的浮窗在点击外部时自动收起
   useEffect(() => {
@@ -100,18 +265,31 @@ export function InputArea({
     (hasChat ? ' input-area--fixed' : ' input-area--inline') +
     (hasChat && enteringFixed ? ' input-area--fixed-enter' : '');
 
+  const inputBoxClass =
+    'input-box' + (isListening || voiceTranscribing ? ' input-box--recording' : '');
+
+  const displayValue = value + (interimTranscript ? interimTranscript : '');
+
   return (
     <div className={wrapperClass}>
       <div className="input-area__inner">
-        <div className="input-box">
+        <div className={inputBoxClass}>
           <textarea
             ref={textareaRef}
             className="input-box__textarea"
-            placeholder={t('placeholder')}
+            placeholder={isListening ? '' : t('placeholder')}
             rows={1}
             aria-label={t('inputMessage')}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
+            value={displayValue}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (isListening) {
+                setValue(v);
+                setInterimTranscript('');
+              } else {
+                setValue(v);
+              }
+            }}
             onKeyDown={handleKeyDown}
             disabled={isStreaming}
           />
@@ -182,6 +360,12 @@ export function InputArea({
           )}
           <div className="input-box__row">
             <div className="input-box__tools">
+              {(isListening || voiceTranscribing) && (
+                <span className="input-box__recording-hint" role="status" aria-live="polite">
+                  <span className="input-box__recording-dot" aria-hidden />
+                  {voiceTranscribing ? t('voiceTranscribing') : t('voiceListening')}
+                </span>
+              )}
               {showAttach && (
                 <>
                   <button
@@ -204,9 +388,12 @@ export function InputArea({
               )}
               <button
                 type="button"
-                className="input-box__tool-btn"
-                title="语音输入"
-                aria-label="语音输入"
+                className={`input-box__tool-btn${isListening || voiceTranscribing ? ' input-box__tool-btn--recording' : ''}`}
+                title={voiceTranscribing ? t('voiceTranscribing') : isListening ? t('voiceStop') : t('voiceInput')}
+                aria-label={voiceTranscribing ? t('voiceTranscribing') : isListening ? t('voiceStop') : t('voiceInput')}
+                aria-pressed={isListening || voiceTranscribing}
+                onClick={toggleVoiceInput}
+                disabled={isStreaming || voiceTranscribing}
               >
                 <span className="material-symbols-outlined">mic</span>
               </button>
@@ -248,14 +435,19 @@ export function InputArea({
             </button>
           </div>
         </div>
-        {attachError && (
+        {(attachError || voiceError) && (
           <p className="input-area__error" role="status">
-            {attachError.type === 'unsupported' &&
-              `${t('quickParseUnsupportedFilePrefix')}${attachError.filename}${t('quickParseSupportedTypesSuffix')}`}
-            {attachError.type === 'tooLarge' &&
-              `${t('quickParseFileTooLargePrefix')}${attachError.filename}${t('quickParseFileTooLargeSuffix')}`}
-            {attachError.type === 'duplicated' &&
-              `${t('quickParseFileDuplicatedPrefix')}${attachError.filename}${t('quickParseFileDuplicatedSuffix')}`}
+            {attachError && (
+              <>
+                {attachError.type === 'unsupported' &&
+                  `${t('quickParseUnsupportedFilePrefix')}${attachError.filename}${t('quickParseSupportedTypesSuffix')}`}
+                {attachError.type === 'tooLarge' &&
+                  `${t('quickParseFileTooLargePrefix')}${attachError.filename}${t('quickParseFileTooLargeSuffix')}`}
+                {attachError.type === 'duplicated' &&
+                  `${t('quickParseFileDuplicatedPrefix')}${attachError.filename}${t('quickParseFileDuplicatedSuffix')}`}
+              </>
+            )}
+            {voiceError && !attachError && voiceError}
           </p>
         )}
         <p className="input-area__disclaimer">{t('disclaimer')}</p>

@@ -68,6 +68,28 @@ export async function updateNotebook(notebookId, { title }) {
 }
 
 /**
+ * 保存笔记本 emoji 到服务端（刷新后可直接从列表带出，避免重复调用 emoji-from-title）
+ * @param {string} notebookId
+ * @param {string} emoji
+ * @returns {Promise<{ emoji: string }>}
+ */
+export async function saveNotebookEmoji(notebookId, emoji) {
+  const resp = await fetch(apiUrl(`/api/rag/notebooks/${notebookId}/emoji`), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ emoji: emoji || '📄' }),
+  });
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(err || `保存 emoji 失败: ${resp.status}`);
+  }
+  return resp.json();
+}
+
+/**
  * 删除笔记本
  * @param {string} notebookId
  * @returns {Promise<{ deleted: string }>}
@@ -158,8 +180,16 @@ export async function uploadRAGDocument({ file, notebook_id }) {
     body: formData,
   });
   if (!resp.ok) {
-    const err = await resp.text();
-    throw new Error(err || `上传失败: ${resp.status}`);
+    let detail = '';
+    try {
+      const body = await resp.json();
+      detail = body.detail != null ? (typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)) : '';
+    } catch {
+      detail = await resp.text();
+    }
+    const err = new Error(detail || `上传失败: ${resp.status}`);
+    err.status = resp.status;
+    throw err;
   }
   return resp.json();
 }
@@ -195,6 +225,28 @@ export async function getDocumentMarkdown(docId) {
     throw new Error(err || `获取文档失败: ${resp.status}`);
   }
   return resp.json();
+}
+
+/**
+ * 根据笔记本名称用 DeepSeek 生成 emoji（失败时后端会返回关键词兜底）
+ * @param {string} title
+ * @returns {Promise<string>}
+ */
+export async function getEmojiForTitle(title) {
+  const resp = await fetch(apiUrl('/api/rag/emoji-from-title'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ title: title || '' }),
+  });
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(err || `获取 emoji 失败: ${resp.status}`);
+  }
+  const data = await resp.json();
+  return data.emoji || '📄';
 }
 
 /**

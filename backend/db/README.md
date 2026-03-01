@@ -5,7 +5,7 @@
 ## 🔄 实现流程
 
 - **建表**：在 `backend` 目录执行 `python -m db.run_schema`，脚本按依赖顺序执行各 `schema_*.sql`（users → user_profiles → user_oauths → conversations → messages → agent_memories → documents → document_chunks）。环境变量使用 `POSTGRES_*`，与 infra 一致。
-- **使用**：各业务模块通过 `*_repository`（asyncpg）访问对应表；RAG 需先跑 `python -m rag.migrate_add_summary` 为 documents 增加 summary 列。
+- **使用**：各业务模块通过 `*_repository`（asyncpg）访问对应表；RAG 需先跑 `python -m rag.migrate_add_summary` 为 documents 增加 summary 列。记忆管理 API（`routers/memory.py`）读写 `agent_memories` 表。笔记本 emoji 列：若表已存在且无 `emoji` 列，需执行 `python -m db.migrate_notebooks_emoji` 一次。
 
 ## 📑 表与建表顺序
 
@@ -15,8 +15,9 @@
 4. **conversations**：`schema_conversations.sql`（AI 会话/聊天室表，依赖 users）
 5. **messages**：`schema_messages.sql`（AI 对话消息明细表，依赖 conversations）
 6. **agent_memories**：`schema_agent_memories.sql`（Agent 长期记忆与反思表，依赖 users、conversations）
-7. **documents**：`schema_documents.sql`（RAG 文档元数据表，防重+状态机+版本追踪，依赖 users）
-8. **document_chunks**：`schema_document_chunks.sql`（RAG 文档切片表，Parent-Child+多模态，依赖 documents）
+7. **notebooks**：`schema_notebooks.sql`（RAG 笔记本表，含 emoji 列，依赖 users）
+8. **documents**：`schema_documents.sql`（RAG 文档元数据表，防重+状态机+版本追踪，依赖 users、notebooks）
+9. **document_chunks**：`schema_document_chunks.sql`（RAG 文档切片表，Parent-Child+多模态，依赖 documents）
 
 执行方式（任选其一）：⚙️
 
@@ -29,6 +30,7 @@ psql "postgresql://aiweb:aiweb@localhost:5432/aiweb" -f db/schema_user_oauths.sq
 psql "postgresql://aiweb:aiweb@localhost:5432/aiweb" -f db/schema_conversations.sql
 psql "postgresql://aiweb:aiweb@localhost:5432/aiweb" -f db/schema_messages.sql
 psql "postgresql://aiweb:aiweb@localhost:5432/aiweb" -f db/schema_agent_memories.sql
+psql "postgresql://aiweb:aiweb@localhost:5432/aiweb" -f db/schema_notebooks.sql
 psql "postgresql://aiweb:aiweb@localhost:5432/aiweb" -f db/schema_documents.sql
 psql "postgresql://aiweb:aiweb@localhost:5432/aiweb" -f db/schema_document_chunks.sql
 ```

@@ -21,9 +21,12 @@ from .models import (
     DocumentBrief,
     DocumentOut,
     NotebookCreate,
+    NotebookEmojiUpdate,
     NotebookOut,
     SearchRequest,
     SearchResponse,
+    TitleEmojiRequest,
+    TitleEmojiResponse,
 )
 
 logger = logging.getLogger("rag.router")
@@ -44,7 +47,7 @@ async def list_notebooks(
     limit: int = 50,
     offset: int = 0,
 ):
-    """按用户查询笔记本列表，含知识源数量与最后更新时间"""
+    """按用户查询笔记本列表，含知识源数量、最后更新时间与首个已解析文档的来源指南"""
     rows = await notebook_repository.list_by_user(user_id, limit=limit, offset=offset)
     return [
         NotebookOut(
@@ -55,6 +58,8 @@ async def list_notebooks(
             last_updated=r.get("last_updated"),
             created_at=r["created_at"],
             updated_at=r["updated_at"],
+            first_doc_summary=r.get("first_doc_summary"),
+            emoji=r.get("emoji"),
         )
         for r in rows
     ]
@@ -81,6 +86,8 @@ async def create_notebook(
         last_updated=None,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        first_doc_summary=None,
+        emoji=None,
     )
 
 
@@ -95,12 +102,27 @@ async def update_notebook(notebook_id: str, body: NotebookCreate):
     return NotebookOut(**r)
 
 
+@router.patch("/notebooks/{notebook_id}/emoji", summary="更新笔记本 emoji")
+async def update_notebook_emoji(notebook_id: str, body: NotebookEmojiUpdate):
+    ok = await notebook_repository.update_emoji(notebook_id, body.emoji)
+    if not ok:
+        raise HTTPException(status_code=404, detail="笔记本不存在")
+    return {"emoji": body.emoji}
+
+
 @router.delete("/notebooks/{notebook_id}", summary="删除笔记本")
 async def delete_notebook(notebook_id: str):
     ok = await notebook_repository.delete(notebook_id)
     if not ok:
         raise HTTPException(status_code=404, detail="笔记本不存在")
     return {"deleted": notebook_id}
+
+
+@router.post("/emoji-from-title", response_model=TitleEmojiResponse, summary="根据名称生成 emoji")
+async def emoji_from_title(body: TitleEmojiRequest):
+    """用 DeepSeek 根据笔记本名称生成一个 emoji；失败时用关键词兜底。"""
+    emoji = await service.get_emoji_for_title(body.title)
+    return TitleEmojiResponse(emoji=emoji)
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +168,8 @@ async def upload_document(
         )
         logger.info(f"[RAG] 文档已入库: doc_id={doc.get('id')}, status={doc.get('status')}")
         return DocumentOut(**doc)
+    except service.DocumentAlreadyInNotebookError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.error(f"[RAG] 上传失败: {e}")
         raise HTTPException(status_code=500, detail=f"上传失败: {e}")

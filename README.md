@@ -15,6 +15,10 @@
   - 使用 Milvus + PostgreSQL 做混合记忆检索
   - 重要性打分 + 时间衰减 + 反思压缩
   - 自动召回「用户偏好 / 关键决策 / 长期项目背景」这类高价值信息
+  - **记忆管理**：用户可在侧栏/菜单中打开「记忆管理」浮窗，查看、添加、编辑、删除记忆；编辑时触发重新向量化
+
+- 🎤 **语音转文字输入**
+  - 支持浏览器 Web Speech API（安全上下文下）或云端 ASR 降级：前端录音上传，后端转 MP3 后调用 Qwen3-ASR-Flash 转写；需配置 `DASHSCOPE_API_KEY` 或 `QWEN_API_KEY`，非 MP3/WAV 需安装 ffmpeg
 
 - 📎 **Quick Parse 文件解析（聊天下的临时文件上传）**
   - 前端通过 MinIO 上传文件，在输入框 & 聊天记录中展示**文件预览卡片**
@@ -27,6 +31,8 @@
   - 独立 RAG 页面（wiki/search）：上传文档 → MinerU/多格式解析 → 版面感知切块 → Dense+Sparse 向量化 → 三段式检索（精确+FTS+RRF+Reranker）
   - 与聊天结合：勾选知识源后提问，召回 chunk 注入上下文，AI 基于检索结果回答；右侧展示召回卡片（表格/图片/公式富文本）、展开文件可定位高亮
   - 来源指南：文档总结入库（大文档截断后生成），展开文件弹窗内展示
+  - **笔记本 emoji**：由 DeepSeek 根据名称生成，失败时关键词兜底；emoji 存库（`notebooks.emoji`），列表返回，刷新不重复请求
+  - **上传反馈**：同笔记本重复上传返回 409；不支持的文件类型返回 400，前端展示「重复上传」「不支持格式」等提示；解析中可打开「解析等待」弹窗玩贪吃蛇
 
 - 🧱 **基础运维与基础设施集成**
   - `infra/docker-compose.yml` 一键拉起 PostgreSQL / Redis / MinIO / Milvus / RabbitMQ / Elasticsearch 等依赖服务
@@ -39,6 +45,8 @@
 - `frontend/`：前端 React 应用（对话页 / 知识库页 / 登录注册等）
 - `backend/`：FastAPI 后端
   - `routers/chat.py`：聊天主路由（含 WebSocket）
+  - `routers/asr.py`：语音识别（上传音频 → 转 MP3 → Qwen3-ASR-Flash）
+  - `routers/memory.py`：记忆管理 HTTP API（列表 / 新增 / 编辑 / 删除）
   - `services/llm_service.py`：LLM 统一调用封装
   - `services/chat_context.py`：对话上下文读取与持久化（Redis + Postgres）
   - `memory/`：长期记忆模块（打分 / 向量检索 / 遗忘 / 反思）
@@ -65,8 +73,8 @@
    - 后端：RAG 检索三路召回（精确 + Sparse + Dense）→ RRF 融合 → Reranker 精排 → 返回 hits；聊天侧将 `rag_context` 注入 system，LLM 基于检索内容回答。
 
 3. **文档入库（RAG）**
-   - 上传：`POST /api/rag/documents/upload` → SHA-256 防重/秒传 → MinIO 存储 → `documents` 表。
-   - 解析：`POST /api/rag/documents/{id}/process` → MinerU（或本地/pdfplumber）/多格式解析 → Block 规范化 → 图片上传 MinIO + 可选 VLM → 版面感知切块（Parent-Child）→ PostgreSQL 全量切片 + 仅 Child 向量化写入 Milvus。
+   - 上传：`POST /api/rag/documents/upload` → 同笔记本重复返回 409，不支持格式返回 400 → SHA-256 防重/秒传 → MinIO 存储 → `documents` 表。
+   - 解析：`POST /api/rag/documents/{id}/process` → MinerU（或本地/pdfplumber）/多格式解析 → Block 规范化 → 图片上传 MinIO + 可选 VLM → 版面感知切块（Parent-Child）→ PostgreSQL 全量切片 + 仅 Child 向量化写入 Milvus；前端解析中可显示「解析等待」弹窗（含贪吃蛇小游戏）。
 
 4. **展开文件与来源指南**
    - `GET /api/rag/documents/{id}/markdown` 返回 `filename`、`segments`（含 `chunk_id`）、`summary`；无 summary 时后端截断内容调用 LLM 生成并入库，前端弹窗内定位到对应 chunk 并高亮。
@@ -108,9 +116,12 @@
    pip install -r requirements.txt
    python -m db.run_schema              # 首次：建表（需 PostgreSQL 已启动）
    python -m rag.migrate_add_summary    # 首次且使用 RAG：为 documents 增加 summary 列
+   python -m db.migrate_notebooks_emoji # 若 notebooks 表已存在且无 emoji 列：为 RAG 笔记本增加 emoji 列（可选）
    python main.py
    # 或 uvicorn main:app --host 0.0.0.0 --port 8000
    ```
+
+   可选系统依赖（见 `backend/requirements.txt` 顶部注释与 `backend/README.md`）：**ffmpeg**（云端语音识别 webm→MP3）、**ngrok**（内网穿透/公网暴露）。
 
 4. 启动前端：
 
@@ -122,7 +133,7 @@
 
 5. 访问前端（默认）：
 
-   - `http://localhost:5173/`
+   - `http://localhost:5173/`（推荐：localhost 下麦克风等权限可用；若用 `http://本机IP:5173` 会显示 Not secure，无法使用语音输入）
 
 **首次部署建议**：在 `backend` 目录将 `.env.example` 复制为 `.env`，按需填写 API Key、数据库等；不填的项使用代码内默认值（如本机 Redis/PostgreSQL/MinIO）。**无需配置 ngrok 即可本地使用**；仅当使用 [mineru.net](https://mineru.net) 云端解析 PDF 时，才需要把本机 MinIO 通过 ngrok/cloudflared 暴露公网并配置 `MINIO_PUBLIC_ENDPOINT`，详见 `backend/rag/README.md` 中「本地开发 + 外部 MinerU」一节。
 
@@ -135,12 +146,13 @@
 - [x] 聊天下的 Quick Parse 文件上传与解析
 - [x] 知识库 RAG 工作流（上传 / 解析 / 切块 / 向量化 / 三段式检索 / 来源指南）
 - [x] RAG 与聊天结合（勾选知识源、召回注入、卡片展示与展开定位高亮）
-- [ ] 用户认证与多用户隔离（当前为占位）
+- [x] 记忆管理（列表 / 新增 / 编辑 / 删除，编辑触发重新向量化）
+- [x] 语音转文字输入（Web Speech API + 云端 Qwen3-ASR-Flash 降级）
+- [ ] 用户认证与多用户隔离（JWT 占位已接入，多用户隔离完善中）
 - [ ] 使用统计与配额（请求次数 / Token 用量）
 - [ ] 个人中心页面优化
 - [ ] RAG 系统更多格式文件支持及测试
-- [ ] RAG功能优化
-- [ ] 语音转文字输入
+- [ ] RAG 功能优化
 - [ ] 联网搜索
 - [ ] 深度搜索功能及页面
 - [ ] mcp接口

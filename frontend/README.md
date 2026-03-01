@@ -32,8 +32,10 @@ frontend/
 │   │   ├── Header.jsx    # 顶栏（主题切换、模型选择等）
 │   │   ├── Welcome.jsx   # 欢迎区 + 聊天列表容器
 │   │   ├── Chat.jsx      # 消息列表
-│   │   ├── ChatMessage.jsx # 单条消息（支持 Markdown/代码高亮/复制）
-│   │   └── InputArea.jsx # 输入框与发送
+│   │   ├── ChatMessage.jsx   # 单条消息（支持 Markdown/代码高亮/复制）
+│   │   ├── InputArea.jsx     # 输入框与发送（含附件、语音）
+│   │   ├── MemoryManageModal.jsx  # 记忆管理浮窗（列表/新增/编辑/删除）
+│   │   └── SnakeGame.jsx     # 贪吃蛇小游戏（解析等待弹窗内）
 │   ├── hooks/
 │   │   ├── useTheme.js   # 亮/暗主题与 localStorage
 │   │   └── useChat.js    # WebSocket 聊天与流式输出
@@ -66,7 +68,7 @@ npm run preview
 | `/login` | 登录页（未登录时入口，邮箱+密码登录） |
 | `/register` | 注册页（邮箱、密码、用户名、手机号，对应后端 users 表） |
 | `/` | 主聊天页（首页，需登录） |
-| `/wiki` | RAG 知识库 / 仪表盘（需登录） |
+| `/wiki` | RAG 知识库 / 仪表盘（需登录，笔记本 emoji、解析等待+贪吃蛇） |
 | `/wiki/search` | RAG 搜索页（需登录） |
 
 未登录访问 `/`、`/wiki`、`/wiki/search` 会重定向到 `/login`；已登录访问 `/login` 或 `/register` 会重定向到 `/`，  
@@ -78,6 +80,23 @@ npm run preview
 2. 启动前端：`cd frontend && npm run dev`
 3. 浏览器访问 `http://localhost:5173`，前端通过 Vite 代理将 `/api` 和 WebSocket 请求转发到 8000 端口。
 
+## 🎤 语音输入与「不安全」提示
+
+浏览器要求**麦克风**仅在**安全上下文**下使用，否则会显示 “Not secure” 并拒绝权限。
+
+- **视为安全**：`https://` 任意域名、`http://localhost`、`http://127.0.0.1`
+- **视为不安全**：`http://192.168.x.x`、`http://你的电脑名` 等非 localhost 的 HTTP
+
+**可用做法：**
+
+| 场景 | 做法 |
+|------|------|
+| 本机访问 | 用 **http://localhost:5173** 或 **http://127.0.0.1:5173**，不要用 `http://本机IP:5173` |
+| 手机/其他设备访问 | 用 **ngrok** 等暴露为 **https** 地址后再访问（如 `ngrok http 5173` 得到 https 链接） |
+| 正式部署 | 使用 **HTTPS**（反向代理配置 SSL 证书） |
+
+若在非安全上下文中点击麦克风，页面会提示：「请用 https 或 http://localhost 访问本页」。
+
 ## 🧠 前端功能说明
 
 - 🎨 **主题**：`useTheme` 管理亮/暗主题，写入 `data-theme` 与 localStorage。
@@ -85,7 +104,9 @@ npm run preview
 - 💬 **聊天流**：`useChat` 维护消息列表、流式内容与 WebSocket，支持暂停生成。
 - 📝 **消息渲染**：`ChatMessage` 对 assistant 消息做 Markdown 渲染、代码高亮与一键复制。
 - 📎 **Quick Parse 文件预览**：`InputArea` 支持附件上传与校验；`ChatMessage` 以文件卡片展示并提示不进入长期记忆。
-- 📚 **RAG 页**：知识源勾选、检索文档卡片（表格/图片/公式富文本）、展开文件定位高亮、来源指南展示。
+- 🧠 **记忆管理**：侧栏/用户菜单提供「记忆管理」入口，`MemoryManageModal` 浮窗内可列表、新增、编辑、删除记忆；编辑会触发后端重新向量化。
+- 🎤 **语音输入**：`InputArea` 支持麦克风录音；安全上下文（localhost/https）下使用 Web Speech API，否则上传 webm 走后端 ASR（Qwen3-ASR-Flash）。
+- 📚 **RAG 页**：知识源勾选、检索文档卡片（表格/图片/公式富文本）、展开文件定位高亮、来源指南展示；笔记本 **emoji** 优先用列表返回的 `emoji`，无则请求 `POST /api/rag/emoji-from-title` 后通过 `PATCH /api/rag/notebooks/{id}/emoji` 保存；上传失败时解析 409/400 展示「重复上传」「不支持格式」等提示；解析中可打开「解析等待」弹窗（内含贪吃蛇小游戏）。
 
 ---
 

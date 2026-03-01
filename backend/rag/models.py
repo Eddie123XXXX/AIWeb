@@ -41,6 +41,16 @@ class NotebookCreate(BaseModel):
     title: str = Field(default="未命名笔记本", max_length=255)
 
 
+class TitleEmojiRequest(BaseModel):
+    """根据名称生成 emoji 的请求"""
+    title: str = Field(..., max_length=255)
+
+
+class TitleEmojiResponse(BaseModel):
+    """返回单个 emoji"""
+    emoji: str
+
+
 class NotebookOut(BaseModel):
     """笔记本列表/详情响应"""
     id: str
@@ -50,6 +60,13 @@ class NotebookOut(BaseModel):
     last_updated: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    first_doc_summary: Optional[str] = None
+    emoji: Optional[str] = None
+
+
+class NotebookEmojiUpdate(BaseModel):
+    """更新笔记本 emoji"""
+    emoji: str = Field(..., max_length=32)
 
 
 # ---------------------------------------------------------------------------

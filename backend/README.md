@@ -18,17 +18,29 @@
 - 🧠 **长期记忆模块（memory）集成**
 - 📎 **Quick Parse 文件解析（MinIO + 长上下文模型）**
 - 🔌 **OpenAI 兼容接口设计**（/api/chat, /api/models 等）
+- 🎤 **语音识别（ASR）**：`POST /api/asr/transcribe`，浏览器上传音频（如 webm），后端转 MP3 后调用 Qwen3-ASR-Flash；需 `DASHSCOPE_API_KEY` 或 `QWEN_API_KEY`，非 MP3/WAV 需 ffmpeg
+- 🧠 **记忆管理 API**：`GET/POST/PUT/DELETE /api/memory/*`，支持列表、新增、编辑、删除记忆；编辑时重新计算 embedding
+- 🔐 **JWT 认证**：登录签发 token，`backend/.env` 中 `JWT_SECRET`、`JWT_EXPIRE_SECONDS` 等
 
 ## 🚀 快速开始
 
 ### 1. 安装依赖
 
-`requirements.txt` 已包含运行与 RAG/记忆/Quick Parse 所需依赖，无需额外安装即可快速部署。可选：需本地 BGE-M3 稀疏向量时取消注释并安装 `FlagEmbedding`。
+`requirements.txt` 已包含运行与 RAG/记忆/Quick Parse 所需 Python 依赖。复制 `.env.example` 为 `.env` 后执行：
 
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
+
+可选：需本地 BGE-M3 稀疏向量时取消注释并安装 `FlagEmbedding`。
+
+**系统/外部依赖（非 pip 包，按需安装）：**
+
+| 工具 | 用途 | 安装示例 |
+|------|------|----------|
+| **ffmpeg** | 语音识别（ASR）：浏览器上传 webm 时，后端用 pydub 将音频转为 MP3 再调用 Qwen3-ASR-Flash；未安装时云端语音识别会报「音频转 MP3 失败」 | Windows: `winget install ffmpeg`<br>macOS: `brew install ffmpeg`<br>Linux: `apt install ffmpeg` / `yum install ffmpeg` |
+| **ngrok** | 将本机后端暴露到公网（内网穿透），便于移动端访问、远程调试或接收 Webhook | 下载 [ngrok](https://ngrok.com/)，或 `winget install ngrok` / `brew install ngrok`，运行 `ngrok http 8000` 获得公网 URL |
 
 # 使用venv环境命令行
 .\.venv\Scripts\Activate.ps1
@@ -75,13 +87,14 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 ### RAG 检索与文档流水线
 
 - **检索**：`POST /api/rag/search`（body：`notebook_id`, `query`, `document_ids?`）。仅勾选的知识源参与召回（`document_ids` 为空则无结果）。三路召回 → RRF → Reranker → Parent-Child 溯源，详见 `backend/rag/README.md`。
-- **文档**：上传 → SHA-256 防重/秒传 → MinIO；`/process` 触发解析（MinerU 或多格式）→ Block 规范化 → 图片上传+VLM 可选 → 版面感知切块 → PostgreSQL 存全量切片，仅 Child 做 Dense+Sparse 向量化写 Milvus。来源指南：`GET /documents/{id}/markdown` 若无 summary 则截断内容调 LLM 生成并入库。
+- **文档**：上传 → 同笔记本重复返回 **409**，不支持的文件类型返回 **400**（前端可解析 `detail` 做「重复上传」「不支持格式」提示）→ SHA-256 防重/秒传 → MinIO；`/process` 触发解析（MinerU 或多格式）→ Block 规范化 → 图片上传+VLM 可选 → 版面感知切块 → PostgreSQL 存全量切片，仅 Child 做 Dense+Sparse 向量化写 Milvus。来源指南：`GET /documents/{id}/markdown` 若无 summary 则截断内容调 LLM 生成并入库。
+- **笔记本 emoji**：`POST /api/rag/emoji-from-title`（body：`title`）根据名称用 DeepSeek 生成 emoji，失败时关键词兜底；`PATCH /api/rag/notebooks/{id}/emoji`（body：`emoji`）保存到 `notebooks.emoji`；列表接口返回 `emoji`，重命名时后端清空 emoji。
 
 ### 技术流程（分层）
 
 | 层 | 模块 | 职责 |
 |----|------|------|
-| 路由 | routers/chat, history, models, user; auth; rag/router | HTTP/WebSocket 入口、参数校验、调用 service |
+| 路由 | routers/chat, history, models, user, asr, memory; auth; rag/router | HTTP/WebSocket 入口、参数校验、调用 service |
 | 业务 | services/chat_context, llm_service, quick_parse; memory; rag/service | 会话与历史、LLM 调用、记忆写入/召回、RAG 编排与检索 |
 | 存储 | db/*_repository; infra (Redis, Postgres, MinIO, Milvus) | 用户/会话/消息/记忆/文档与切片的 CRUD、向量与对象存储 |
 
@@ -121,6 +134,26 @@ GET /api/models
 ```http
 DELETE /api/models/{model_id}
 ```
+
+### 🎤 语音识别（ASR）
+
+```http
+POST /api/asr/transcribe
+Content-Type: multipart/form-data
+
+file: <音频文件，如 webm/mp3/wav>
+```
+
+响应：`{ "text": "转写文本" }`。需配置 `DASHSCOPE_API_KEY` 或 `QWEN_API_KEY`；非 MP3/WAV 需安装 ffmpeg。
+
+### 🧠 记忆管理（需登录）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/memory/list` | 分页列出当前用户记忆 |
+| POST | `/api/memory/create` | 新增一条记忆（body: `content` 等） |
+| PUT | `/api/memory/{memory_id}` | 更新记忆（会重新计算 embedding） |
+| DELETE | `/api/memory/{memory_id}` | 删除记忆 |
 
 ### 💬 聊天
 
@@ -269,8 +302,10 @@ backend/
 │   ├── chat.py          # 聊天 WebSocket 与消息处理
 │   ├── history.py       # 会话与历史列表
 │   ├── models.py        # 模型配置 CRUD
-│   └── user.py          # 用户信息
-├── auth/                # 认证（占位与 JWT）
+│   ├── user.py          # 用户信息
+│   ├── asr.py           # 语音识别（上传音频 → 转写）
+│   └── memory.py        # 记忆管理 CRUD（list/create/update/delete）
+├── auth/                # 认证（JWT 登录签发、占位扩展）
 ├── services/
 │   ├── llm_service.py   # 多模型 LLM 调用封装
 │   ├── chat_context.py  # 会话与消息持久化、记忆写入触发
@@ -297,8 +332,10 @@ python -m memory.test_memory_full
 - [x] 对话历史持久化（PostgreSQL + Redis）
 - [x] 文件上传与解析（Quick Parse，基于 MinIO）
 - [x] 长期记忆模块（memory，Milvus + PostgreSQL）
-- [x] RAG 知识库（上传/解析/切块/向量化/三段式检索/来源指南）
-- [ ] 用户认证 / 多用户隔离（当前占位）
+- [x] RAG 知识库（上传/解析/切块/向量化/三段式检索/来源指南；上传 409/400 与笔记本 emoji 存库）
+- [x] 语音识别 ASR（Qwen3-ASR-Flash，webm→MP3）
+- [x] 记忆管理 HTTP API（列表/新增/编辑/删除，编辑触发 re-embed）
+- [ ] 用户认证 / 多用户隔离（JWT 已接入，多租户完善中）
 - [ ] 使用统计与配额（调用次数 / Token 用量）
 
 如果你想「只用后端」做自己的多模型聊天服务，也完全没问题 ——  

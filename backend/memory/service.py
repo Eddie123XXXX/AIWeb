@@ -571,3 +571,97 @@ async def compress_memories(
     summary = (resp.choices[0].message.content or "").strip()
     return summary[:max_chars] if len(summary) > max_chars else summary
 
+
+# ---------- 记忆管理（用户增删改查，改时重算 embedding）----------
+
+async def list_memories_for_user(
+    user_id: int,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """列出当前用户的记忆，用于管理浮窗。"""
+    return await agent_memory_repository.list_by_user(user_id=user_id, limit=limit, offset=offset)
+
+
+async def create_memory_manual(
+    *,
+    user_id: int,
+    content: str,
+    domain: str = "general_chat",
+    memory_type: str = "fact",
+    importance_score: float = 0.5,
+) -> dict[str, Any]:
+    """
+    用户手动新增一条记忆：写 PG + 向量化 + 写 Milvus。
+    """
+    from uuid import uuid4
+
+    mem_id = str(uuid4())
+    await agent_memory_repository.create(
+        id=mem_id,
+        user_id=user_id,
+        content=content,
+        memory_type=memory_type,
+        domain=domain,
+        vector_collection="agent_memories",
+        importance_score=max(0.0, min(1.0, importance_score)),
+        expires_at=None,
+    )
+    embeddings = await _embed_texts([content])
+    await upsert_memories(
+        ids=[mem_id],
+        embeddings=embeddings,
+        metadatas=[{"user_id": user_id, "domain": domain, "content": content, "memory_type": memory_type}],
+    )
+    row = await agent_memory_repository.get_by_ids([mem_id])
+    return row[0] if row else {"id": mem_id, "content": content, "domain": domain, "memory_type": memory_type, "importance_score": importance_score}
+
+
+async def update_memory_and_reembed(
+    *,
+    user_id: int,
+    memory_id: str,
+    content: str,
+    domain: str | None = None,
+    importance_score: float | None = None,
+) -> dict[str, Any] | None:
+    """
+    更新记忆内容（及可选 domain、importance_score），并重新计算 embedding 写回 Milvus。
+    """
+    updated = await agent_memory_repository.update_content(
+        id=memory_id,
+        user_id=user_id,
+        content=content,
+        domain=domain,
+        importance_score=importance_score,
+    )
+    if not updated:
+        return None
+    # 从 Milvus 删除旧向量，再插入新向量
+    await delete_memories(ids=[memory_id])
+    embeddings = await _embed_texts([updated["content"]])
+    await upsert_memories(
+        ids=[memory_id],
+        embeddings=embeddings,
+        metadatas=[{
+            "user_id": user_id,
+            "domain": updated.get("domain", "general_chat"),
+            "content": updated["content"],
+            "memory_type": updated.get("memory_type", "fact"),
+        }],
+    )
+    return updated
+
+
+async def delete_memory_for_user(user_id: int, memory_id: str) -> bool:
+    """
+    删除一条记忆：PG 软删除 + Milvus 删除向量。仅当属于该用户时执行。
+    """
+    rows = await agent_memory_repository.get_by_ids([memory_id])
+    if not rows or rows[0].get("user_id") != user_id:
+        return False
+    n = await agent_memory_repository.soft_delete_many([memory_id])
+    if n > 0:
+        await delete_memories(ids=[memory_id])
+    return n > 0
+

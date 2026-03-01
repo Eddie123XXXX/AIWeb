@@ -33,7 +33,7 @@ load_dotenv()
 from fastapi import HTTPException
 
 from auth.router import router as auth_router
-from routers import chat, history, models, user
+from routers import asr, chat, history, memory as memory_router, models, user
 from infra.minio import router as storage_router
 from db.user_repository import hash_password, user_repository
 from models import UserCreate, UserProfile
@@ -152,6 +152,8 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
+app.include_router(asr.router, prefix="/api")
+app.include_router(memory_router.router, prefix="/api")
 app.include_router(models.router, prefix="/api")
 app.include_router(user.router, prefix="/api/user")
 app.include_router(storage_router, prefix="/api")

@@ -84,8 +84,8 @@
 ### 1. 文档上传与防重
 
 - **入口**：`router.py` 中 `POST /rag/documents/upload`，接收 `notebook_id` + 文件 multipart。
-- **实现**：`service.upload_document`。
-  - 计算文件 SHA-256，查 `document_repository.find_by_notebook_and_hash` 做同笔记本防重；若已存在直接返回。
+- **实现**：路由先校验 `parsers.is_supported(filename)`，不支持则返回 **400**（`detail` 含支持扩展名列表）；`service.upload_document` 内同笔记本重复抛 `DocumentAlreadyInNotebookError`，路由返回 **409**。
+  - 计算文件 SHA-256，查 `document_repository.find_by_notebook_and_hash` 做同笔记本防重；若已存在直接抛错返回 409。
   - 查 `find_any_by_hash` 做跨笔记本秒传：若其他笔记本有同 hash，则复制其 chunk 与向量到当前文档，并返回，不再解析。
   - 否则生成 `doc_id`，`storage_path = rag/{notebook_id}/{doc_id}/{filename}`，调用 MinIO 上传，写入 `documents` 表，状态 `UPLOADED`。
 - **相关**：`document_repository.py`、`infra/minio/service.py`。
@@ -187,11 +187,13 @@
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/notebooks` | 笔记本列表 |
+| GET | `/notebooks` | 笔记本列表（含 emoji） |
 | POST | `/notebooks` | 创建笔记本 |
-| PUT | `/notebooks/{id}` | 更新笔记本 |
+| PUT | `/notebooks/{id}` | 更新笔记本（重命名时后端清空 emoji） |
 | DELETE | `/notebooks/{id}` | 删除笔记本 |
-| POST | `/documents/upload` | 上传文档（防重 + 秒传） |
+| POST | `/emoji-from-title` | 根据名称生成 emoji（DeepSeek + 关键词兜底） |
+| PATCH | `/notebooks/{id}/emoji` | 更新笔记本 emoji |
+| POST | `/documents/upload` | 上传文档（同笔记本重复 409、不支持格式 400；防重 + 秒传） |
 | POST | `/documents/{id}/process` | 触发解析流水线（可异步入队） |
 | POST | `/documents/{id}/reparse` | 重新解析（弃旧切片与向量） |
 | GET | `/documents` | 笔记本下文档列表 |

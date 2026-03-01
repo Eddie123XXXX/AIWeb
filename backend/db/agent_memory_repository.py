@@ -202,6 +202,137 @@ class AgentMemoryRepository:
         finally:
             await conn.close()
 
+    async def list_by_user(
+        self,
+        user_id: int,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """
+        按用户分页列出未删除的记忆（完整字段），用于记忆管理界面。
+        """
+        conn = await _get_conn()
+        try:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    id,
+                    user_id,
+                    conversation_id,
+                    memory_type,
+                    domain,
+                    source_role,
+                    source_message_id,
+                    content,
+                    metadata,
+                    vector_collection,
+                    importance_score,
+                    access_count,
+                    last_accessed_at,
+                    expires_at,
+                    is_deleted,
+                    created_at,
+                    updated_at
+                FROM agent_memories
+                WHERE user_id = $1 AND is_deleted = FALSE
+                ORDER BY created_at DESC
+                LIMIT $2 OFFSET $3
+                """,
+                user_id,
+                limit,
+                offset,
+            )
+            return [_row_to_memory(r) for r in rows]
+        finally:
+            await conn.close()
+
+    async def update_content(
+        self,
+        id: str,
+        user_id: int,
+        content: str,
+        domain: str | None = None,
+        importance_score: float | None = None,
+    ) -> dict[str, Any] | None:
+        """
+        更新记忆内容（及可选的 domain、importance_score）。仅当该条属于当前用户时更新。
+        返回更新后的行，不存在或非本人则返回 None。
+        """
+        conn = await _get_conn()
+        try:
+            row = await conn.fetchrow(
+                "SELECT id FROM agent_memories WHERE id = $1 AND user_id = $2 AND is_deleted = FALSE",
+                id,
+                user_id,
+            )
+            if row is None:
+                return None
+            if domain is not None and importance_score is not None:
+                score = max(0.0, min(1.0, float(importance_score)))
+                out = await conn.fetchrow(
+                    """
+                    UPDATE agent_memories
+                    SET content = $3, domain = $4, importance_score = $5, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $1 AND user_id = $2
+                    RETURNING id, user_id, conversation_id, memory_type, domain, source_role,
+                      source_message_id, content, metadata, vector_collection, importance_score,
+                      access_count, last_accessed_at, expires_at, is_deleted, created_at, updated_at
+                    """,
+                    id,
+                    user_id,
+                    content,
+                    domain,
+                    score,
+                )
+            elif domain is not None:
+                out = await conn.fetchrow(
+                    """
+                    UPDATE agent_memories
+                    SET content = $3, domain = $4, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $1 AND user_id = $2
+                    RETURNING id, user_id, conversation_id, memory_type, domain, source_role,
+                      source_message_id, content, metadata, vector_collection, importance_score,
+                      access_count, last_accessed_at, expires_at, is_deleted, created_at, updated_at
+                    """,
+                    id,
+                    user_id,
+                    content,
+                    domain,
+                )
+            elif importance_score is not None:
+                score = max(0.0, min(1.0, float(importance_score)))
+                out = await conn.fetchrow(
+                    """
+                    UPDATE agent_memories
+                    SET content = $3, importance_score = $4, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $1 AND user_id = $2
+                    RETURNING id, user_id, conversation_id, memory_type, domain, source_role,
+                      source_message_id, content, metadata, vector_collection, importance_score,
+                      access_count, last_accessed_at, expires_at, is_deleted, created_at, updated_at
+                    """,
+                    id,
+                    user_id,
+                    content,
+                    score,
+                )
+            else:
+                out = await conn.fetchrow(
+                    """
+                    UPDATE agent_memories
+                    SET content = $3, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $1 AND user_id = $2
+                    RETURNING id, user_id, conversation_id, memory_type, domain, source_role,
+                      source_message_id, content, metadata, vector_collection, importance_score,
+                      access_count, last_accessed_at, expires_at, is_deleted, created_at, updated_at
+                    """,
+                    id,
+                    user_id,
+                    content,
+                )
+            return _row_to_memory(out) if out else None
+        finally:
+            await conn.close()
+
     async def list_by_user_for_retention(self, user_id: int) -> list[dict[str, Any]]:
         """
         按用户列出未删除的记忆，用于 retention 计算。

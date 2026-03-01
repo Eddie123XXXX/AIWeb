@@ -12,6 +12,7 @@ export function Sidebar({
   onNewChat,
   onLogout,
   onOpenProfile,
+  onOpenMemoryManage,
   conversations = [],
   currentConversationId = null,
   onSelectConversation,
@@ -238,6 +239,20 @@ export function Sidebar({
                   person
                 </span>
                 <span>{t('profile')}</span>
+              </button>
+              <button
+                type="button"
+                className="sidebar__user-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  onOpenMemoryManage?.();
+                }}
+              >
+                <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">
+                  psychology
+                </span>
+                <span>{t('memoryManage')}</span>
               </button>
               <button type="button" className="sidebar__user-menu-item" role="menuitem">
                 <span className="material-symbols-outlined sidebar__user-menu-icon" aria-hidden="true">

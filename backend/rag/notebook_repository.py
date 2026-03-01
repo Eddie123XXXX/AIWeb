@@ -38,7 +38,7 @@ class NotebookRepository:
                 """
                 INSERT INTO notebooks (id, title, user_id)
                 VALUES ($1, $2, $3)
-                RETURNING id, title, user_id, created_at, updated_at
+                RETURNING id, title, user_id, emoji, created_at, updated_at
                 """,
                 id, title or "未命名笔记本", user_id,
             )
@@ -50,7 +50,7 @@ class NotebookRepository:
         conn = await _conn()
         try:
             row = await conn.fetchrow(
-                "SELECT id, title, user_id, created_at, updated_at FROM notebooks WHERE id = $1",
+                "SELECT id, title, user_id, emoji, created_at, updated_at FROM notebooks WHERE id = $1",
                 notebook_id,
             )
             return _row_to_dict(row) if row else None
@@ -58,14 +58,15 @@ class NotebookRepository:
             await conn.close()
 
     async def get_by_id_with_stats(self, notebook_id: str) -> Optional[dict[str, Any]]:
-        """获取笔记本详情，含知识源数量与最后更新时间"""
+        """获取笔记本详情，含知识源数量、最后更新时间与首个已解析文档的来源指南"""
         conn = await _conn()
         try:
             row = await conn.fetchrow(
                 """
-                SELECT n.id, n.title, n.user_id, n.created_at, n.updated_at,
+                SELECT n.id, n.title, n.user_id, n.emoji, n.created_at, n.updated_at,
                        COALESCE(d.doc_count, 0)::int AS source_count,
-                       d.last_updated
+                       d.last_updated,
+                       first_doc.summary AS first_doc_summary
                 FROM notebooks n
                 LEFT JOIN (
                     SELECT notebook_id,
@@ -74,6 +75,13 @@ class NotebookRepository:
                     FROM documents
                     GROUP BY notebook_id
                 ) d ON n.id = d.notebook_id
+                LEFT JOIN LATERAL (
+                    SELECT summary FROM documents
+                    WHERE notebook_id = n.id AND status = 'READY'
+                      AND summary IS NOT NULL AND TRIM(summary) != ''
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                ) first_doc ON true
                 WHERE n.id = $1
                 """,
                 notebook_id,
@@ -82,6 +90,8 @@ class NotebookRepository:
                 return None
             d = _row_to_dict(row)
             d["source_count"] = d.get("source_count") or 0
+            s = d.get("first_doc_summary")
+            d["first_doc_summary"] = (s.strip() if s and isinstance(s, str) else None) or None
             return d
         finally:
             await conn.close()
@@ -93,9 +103,10 @@ class NotebookRepository:
         try:
             rows = await conn.fetch(
                 """
-                SELECT n.id, n.title, n.user_id, n.created_at, n.updated_at,
+                SELECT n.id, n.title, n.user_id, n.emoji, n.created_at, n.updated_at,
                        COALESCE(d.doc_count, 0)::int AS source_count,
-                       d.last_updated
+                       d.last_updated,
+                       first_doc.summary AS first_doc_summary
                 FROM notebooks n
                 LEFT JOIN (
                     SELECT notebook_id,
@@ -104,6 +115,13 @@ class NotebookRepository:
                     FROM documents
                     GROUP BY notebook_id
                 ) d ON n.id = d.notebook_id
+                LEFT JOIN LATERAL (
+                    SELECT summary FROM documents
+                    WHERE notebook_id = n.id AND status = 'READY'
+                      AND summary IS NOT NULL AND TRIM(summary) != ''
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                ) first_doc ON true
                 WHERE n.user_id = $1
                 ORDER BY n.updated_at DESC
                 LIMIT $2 OFFSET $3
@@ -115,6 +133,8 @@ class NotebookRepository:
                 d = _row_to_dict(r)
                 d["source_count"] = d.get("source_count") or 0
                 d["last_updated"] = d.get("last_updated")
+                s = d.get("first_doc_summary")
+                d["first_doc_summary"] = (s.strip() if s and isinstance(s, str) else None) or None
                 result.append(d)
             return result
         finally:
@@ -126,13 +146,29 @@ class NotebookRepository:
             row = await conn.fetchrow(
                 """
                 UPDATE notebooks
-                SET title = $1, updated_at = CURRENT_TIMESTAMP
+                SET title = $1, emoji = NULL, updated_at = CURRENT_TIMESTAMP
                 WHERE id = $2
-                RETURNING id, title, user_id, created_at, updated_at
+                RETURNING id, title, user_id, emoji, created_at, updated_at
                 """,
                 title, notebook_id,
             )
             return _row_to_dict(row) if row else None
+        finally:
+            await conn.close()
+
+    async def update_emoji(self, notebook_id: str, emoji: str) -> bool:
+        conn = await _conn()
+        try:
+            result = await conn.execute(
+                """
+                UPDATE notebooks
+                SET emoji = $1, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $2
+                """,
+                (emoji or "").strip()[:32] if emoji else None,
+                notebook_id,
+            )
+            return result == "UPDATE 1"
         finally:
             await conn.close()
 
