@@ -1,4 +1,11 @@
-## 🧱 数据库层（DB）
+# AIWeb DB Layer 🧱
+
+## 快速导航
+
+- 建表入口：`python -m db.run_schema`
+- 表结构：users / conversations / messages / agent_memories / documents / document_chunks
+- 迁移脚本：`rag.migrate_add_summary`、`db.migrate_notebooks_emoji`
+- 数据访问：各 `*_repository.py`
 
 数据库主要负责用户、会话、消息以及 Agent 记忆等结构化信息的持久化，是 AIWeb 的「记事本 + 索引库」。📒
 

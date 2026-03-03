@@ -1,4 +1,16 @@
-# AI 聊天平台后端 🧠
+# AIWeb Backend 🧠
+
+## 快速导航
+
+- 能力概览：多模型聊天、记忆、RAG、ASR、认证
+- 快速启动：安装依赖 → 运行服务 → 打开 Swagger
+- 关键模块：`routers/`、`services/`、`memory/`、`rag/`、`agentic/`
+- 相关文档：
+  - `backend/rag/README.md`
+  - `backend/memory/README.md`
+  - `backend/agentic/README.md`
+  - `backend/db/README.md`
+  - `backend/infra/README.md`
 
 基于 FastAPI 构建的多模型 LLM 聊天服务后端，是整个 AIWeb 的「中枢神经」。  
 负责把模型、记忆、RAG、文件解析、用户体系这些能力都串起来。
@@ -21,6 +33,7 @@
 - 🎤 **语音识别（ASR）**：`POST /api/asr/transcribe`，浏览器上传音频（如 webm），后端转 MP3 后调用 Qwen3-ASR-Flash；需 `DASHSCOPE_API_KEY` 或 `QWEN_API_KEY`，非 MP3/WAV 需 ffmpeg
 - 🧠 **记忆管理 API**：`GET/POST/PUT/DELETE /api/memory/*`，支持列表、新增、编辑、删除记忆；编辑时重新计算 embedding
 - 🔐 **JWT 认证**：登录签发 token，`backend/.env` 中 `JWT_SECRET`、`JWT_EXPIRE_SECONDS` 等
+- 🧩 **Agentic 模式（ReAct + 工具调用）**：`/api/agentic/ws` 流式 Thought / Action / Observation / Final Answer，`/api/agentic/chat` 非流式；支持内置工具（记忆 / RAG / Quick Parse 等）、SkillTool（`backend/agentic/SKILLS`）与 MCP 工具（`/api/agentic/mcp-servers` 与 `/api/agentic/mcp-servers/add`）
 
 ## 🚀 快速开始
 
@@ -310,6 +323,7 @@ backend/
 │   ├── llm_service.py   # 多模型 LLM 调用封装
 │   ├── chat_context.py  # 会话与消息持久化、记忆写入触发
 │   └── quick_parse.py   # Quick Parse 文件解析
+├── agentic/             # Agentic 模式（ReAct + Tool Calls + Skills + MCP），见 agentic/README.md
 ├── memory/              # 长期记忆（打分、混合召回、反思、遗忘），见 memory/README.md
 ├── rag/                 # 知识库（上传、解析、切块、检索、来源指南），见 rag/README.md
 ├── db/                  # 建表脚本与说明，见 db/README.md
@@ -332,7 +346,7 @@ python -m memory.test_memory_full
 - [x] 对话历史持久化（PostgreSQL + Redis）
 - [x] 文件上传与解析（Quick Parse，基于 MinIO）
 - [x] 长期记忆模块（memory，Milvus + PostgreSQL）
-- [x] RAG 知识库（上传/解析/切块/向量化/三段式检索/来源指南；上传 409/400 与笔记本 emoji 存库）
+- [x] RAG 知识库（上传/解析/切块/向量化/三段式检索/来源指南）
 - [x] 语音识别 ASR（Qwen3-ASR-Flash，webm→MP3）
 - [x] 记忆管理 HTTP API（列表/新增/编辑/删除，编辑触发 re-embed）
 - [ ] 用户认证 / 多用户隔离（JWT 已接入，多租户完善中）

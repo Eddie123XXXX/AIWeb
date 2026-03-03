@@ -1,4 +1,11 @@
-# AIWeb 前端（React）💻
+# AIWeb Frontend 💻
+
+## 快速导航
+
+- 技术栈：React 18 + Vite
+- 页面与路由：聊天、知识库、登录注册
+- 联调方式：本地代理 `/api` 与 WebSocket
+- 重点模块：`components/`、`hooks/useChat.js`、`utils/`
 
 这里是 AIWeb 的前端界面：  
 用 React + Vite 写的一个「多模型聊天 + 知识库 + 记忆面板」小控制台。😎
@@ -34,8 +41,10 @@ frontend/
 │   │   ├── Chat.jsx      # 消息列表
 │   │   ├── ChatMessage.jsx   # 单条消息（支持 Markdown/代码高亮/复制）
 │   │   ├── InputArea.jsx     # 输入框与发送（含附件、语音）
-│   │   ├── MemoryManageModal.jsx  # 记忆管理浮窗（列表/新增/编辑/删除）
-│   │   └── SnakeGame.jsx     # 贪吃蛇小游戏（解析等待弹窗内）
+│   │   ├── MemoryManageModal.jsx      # 记忆管理浮窗（列表/新增/编辑/删除）
+│   │   ├── AgenticReasoningPanel.jsx  # Agentic 推理过程面板（展示 Thought/Action/Observation 事件流）
+│   │   ├── AddMCPServerModal.jsx      # 添加 MCP Server 弹窗（一键发现并勾选 MCP 工具）
+│   │   └── SnakeGame.jsx              # 贪吃蛇小游戏（解析等待弹窗内）
 │   ├── hooks/
 │   │   ├── useTheme.js   # 亮/暗主题与 localStorage
 │   │   └── useChat.js    # WebSocket 聊天与流式输出
@@ -106,6 +115,7 @@ npm run preview
 - 📎 **Quick Parse 文件预览**：`InputArea` 支持附件上传与校验；`ChatMessage` 以文件卡片展示并提示不进入长期记忆。
 - 🧠 **记忆管理**：侧栏/用户菜单提供「记忆管理」入口，`MemoryManageModal` 浮窗内可列表、新增、编辑、删除记忆；编辑会触发后端重新向量化。
 - 🎤 **语音输入**：`InputArea` 支持麦克风录音；安全上下文（localhost/https）下使用 Web Speech API，否则上传 webm 走后端 ASR（Qwen3-ASR-Flash）。
+- 🧩 **Agentic 推理与工具调用**：`Header` 提供 Agentic 模式开关；开启后 `useChat` 在后台切换使用 Agentic 后端接口（`/api/agentic/*`），`AgenticReasoningPanel` 在聊天区顶部展示 Thought / Action / Observation 事件流；`Welcome` 与 `InputArea` 右下「更多」区域展示可用工具列表，并可通过 `AddMCPServerModal` 一键添加 MCP Server。
 - 📚 **RAG 页**：知识源勾选、检索文档卡片（表格/图片/公式富文本）、展开文件定位高亮、来源指南展示；笔记本 **emoji** 优先用列表返回的 `emoji`，无则请求 `POST /api/rag/emoji-from-title` 后通过 `PATCH /api/rag/notebooks/{id}/emoji` 保存；上传失败时解析 409/400 展示「重复上传」「不支持格式」等提示；解析中可打开「解析等待」弹窗（内含贪吃蛇小游戏）。
 
 ---

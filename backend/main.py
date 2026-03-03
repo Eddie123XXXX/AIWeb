@@ -43,6 +43,7 @@ from infra.postgres import router as postgres_router
 from infra.rabbitmq import router as rabbitmq_router
 from infra.elasticsearch import router as es_router
 from infra.mineru.router import router as mineru_router
+from agentic.main import router as agentic_router
 
 # Milvus 依赖 pymilvus，在 uvicorn --reload 子进程中可能缺少 pkg_resources，改为可选加载
 try:
@@ -180,6 +181,9 @@ else:
             content={"detail": "RAG 模块未加载，请检查后端日志（notebooks 表、依赖等）并重启后端"},
         )
 
+# Agentic 模式路由（Thought / Action / Observation / Final Answer 循环）
+app.include_router(agentic_router)
+
 
 @app.get("/", tags=["root"])
 async def root():
@@ -199,5 +203,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    # Windows 下 --reload 子进程可能收不到请求，默认不用 reload；需热重载可改为 reload=True
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

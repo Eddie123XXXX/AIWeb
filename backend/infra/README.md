@@ -1,4 +1,11 @@
-# 后端 Infra 服务 ⚙️
+# AIWeb Backend Infra ⚙️
+
+## 快速导航
+
+- 分层原则：业务路由与基础设施适配分离
+- 子模块约定：`service.py` + `router.py`
+- 挂载方式：`main.py` 中 `include_router`
+- 常见子模块：MinIO / Redis / Postgres / Milvus / RabbitMQ / Elasticsearch
 
 本目录用于集中管理对接**外部/基础设施**的代码（如 MinIO、Redis、数据库等），  
 和业务路由 `routers/`、通用业务服务 `services/` 分层，方便你在不「拆后端」的前提下疯狂扩展能力。😄

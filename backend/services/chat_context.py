@@ -30,6 +30,14 @@ def _context_key(conversation_id: str) -> str:
     return f"{CHAT_CONTEXT_KEY_PREFIX}{conversation_id}"
 
 
+def _fallback_title_from_user_content(user_content: str) -> str:
+    """基于用户首轮问题的本地兜底标题，避免长期停留“新对话”."""
+    text = (user_content or "").strip().replace("\n", " ")
+    if not text:
+        return "新对话"
+    return text[:TITLE_MAX_CHARS]
+
+
 def _message_to_json_item(msg: dict[str, Any]) -> str:
     """将单条消息转为存入 Redis 的 JSON 字符串（仅 role + content，用于拼 prompt）。"""
     return json.dumps(
@@ -214,10 +222,19 @@ async def persist_round(
             {"role": "assistant", "content": assistant_content},
         ],
     )
-    # 首轮对话后异步生成标题，不阻塞响应
-    n = await message_repository.count_by_conversation(conversation_id)
-    if n == 2:
-        asyncio.create_task(_generate_and_set_title(conversation_id, model_id or "default"))
+    # 标题生成：只要当前还是默认标题，就按对话内容异步生成标题（不阻塞响应）
+    # 这样可兼容 agentic 场景下可能出现的“首轮计数不严格等于 2”的边界情况。
+    try:
+        conv_for_title = await conversation_repository.get_by_id(conversation_id)
+        current_title = (conv_for_title or {}).get("title") or ""
+        if current_title in {"新对话", "New conversation"}:
+            # 先同步用用户问题做一个兜底标题，避免前端长时间显示“新对话”
+            fallback_title = _fallback_title_from_user_content(user_content)
+            if fallback_title and fallback_title not in {"新对话", "New conversation"}:
+                await conversation_repository.update(conversation_id, title=fallback_title)
+            asyncio.create_task(_generate_and_set_title(conversation_id, model_id or "default"))
+    except Exception as e:
+        logger.warning("触发会话标题生成失败（忽略，不影响主流程）: %s", e)
 
     # 异步写入长期记忆（不阻塞前端，后台执行）
     try:

@@ -1,5 +1,16 @@
 # AIWeb 🚀
 
+## 快速导航
+
+- 项目概览：功能、架构、目录、Roadmap
+- 本地启动：`infra` → `backend` → `frontend`
+- 模块文档：
+  - `backend/README.md`
+  - `frontend/README.md`
+  - `backend/rag/README.md`
+  - `backend/memory/README.md`
+  - `backend/agentic/README.md`
+
 一个面向个人与小团队的全栈 AI 工作台。  
 前端基于 React + Vite，后端基于 FastAPI，整合「聊天 / 记忆 / 知识库 / 文件解析」等能力，帮你在本地或私有环境里搭建**自己的 AI 助手控制台**。😎
 
@@ -34,6 +45,11 @@
   - **笔记本 emoji**：由 DeepSeek 根据名称生成，失败时关键词兜底；emoji 存库（`notebooks.emoji`），列表返回，刷新不重复请求
   - **上传反馈**：同笔记本重复上传返回 409；不支持的文件类型返回 400，前端展示「重复上传」「不支持格式」等提示；解析中可打开「解析等待」弹窗玩贪吃蛇
 
+- 🧩 **Agentic 模式 & 工具调用（`backend/agentic`）**
+  - ReAct 工作流：Thought / Action / Observation / Final Answer，全程流式输出
+  - 工具来源：内置工具（记忆 / RAG / Quick Parse / Web Search 示例等）、Skills 系统（`backend/agentic/SKILLS`）、MCP Server（通过 `/api/agentic/mcp-servers` 管理）
+  - 前端在聊天页提供 Agentic 开关与推理面板，按会话记住开关状态，可勾选启用的工具列表并一键添加 MCP Server
+
 - 🧱 **基础运维与基础设施集成**
   - `infra/docker-compose.yml` 一键拉起 PostgreSQL / Redis / MinIO / Milvus / RabbitMQ / Elasticsearch 等依赖服务
   - 提供调试路由：Redis / Postgres / RabbitMQ / Elasticsearch 等健康检查
@@ -53,6 +69,7 @@
   - `infra/minio/`：对象存储上传、预签名 URL 生成
   - `services/quick_parse.py`：Quick Parse 文件解析逻辑
   - `db/`：数据库建表脚本与说明
+  - `agentic/`：Agentic 模式（ReAct + Tool Calls + Skills + MCP），详见 `backend/agentic/README.md`
   - `infra/`：后端 Infra 适配（Redis / Postgres / MinIO / Milvus / RabbitMQ / Elasticsearch 等）
 
 - `infra/`：Docker Compose 基础设施（MinIO, Redis, PostgreSQL, Milvus, Attu, RabbitMQ, RedisInsight, pgAdmin, Elasticsearch, Kibana）
@@ -118,7 +135,7 @@
    python -m rag.migrate_add_summary    # 首次且使用 RAG：为 documents 增加 summary 列
    python -m db.migrate_notebooks_emoji # 若 notebooks 表已存在且无 emoji 列：为 RAG 笔记本增加 emoji 列（可选）
    python main.py
-   # 或 uvicorn main:app --host 0.0.0.0 --port 8000
+   # 或 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
    ```
 
    可选系统依赖（见 `backend/requirements.txt` 顶部注释与 `backend/README.md`）：**ffmpeg**（云端语音识别 webm→MP3）、**ngrok**（内网穿透/公网暴露）。
@@ -156,6 +173,6 @@
 - [ ] 联网搜索
 - [ ] 深度搜索功能及页面
 - [ ] mcp接口
-- [ ] skill接口
+- [ ] skill接口待完善
 - [ ] 临时对话
 

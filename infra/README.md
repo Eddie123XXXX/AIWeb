@@ -1,4 +1,11 @@
-# 🚀 MinIO + Redis + PostgreSQL + Milvus + Attu + RabbitMQ + RedisInsight + pgAdmin 基础设施
+# AIWeb Infra 🚀
+
+## 快速导航
+
+- 一键启动：`docker compose -f infra/docker-compose.yml up -d`
+- 服务清单：MinIO / Redis / PostgreSQL / Milvus / RabbitMQ / Elasticsearch
+- 配套工具：Attu / RedisInsight / pgAdmin / Kibana
+- MinerU：GPU/CPU 模式切换与 profile 启动
 
 一条命令，把一整套「个人 AI 数据中心」拉起来。  
 这就是 AIWeb 背后安静工作的 **小型云平台**。😎

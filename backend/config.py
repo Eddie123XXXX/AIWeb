@@ -58,8 +58,8 @@ PROVIDER_CONFIGS = {
     "zhipu": {
         "display_name": "智谱 GLM",
         "api_base": "https://open.bigmodel.cn/api/paas/v4",
-        "models": ["glm-4-plus", "glm-4-flash", "glm-4-air"],
-        "max_tokens": 8192,
+        "models": ["GLM-5"],
+        "max_tokens": 128000,
     },
     "moonshot": {
         "display_name": "月之暗面 Kimi",

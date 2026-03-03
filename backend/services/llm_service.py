@@ -81,6 +81,28 @@ class LLMService:
         response = await self._create_completion(msg, stream=False, extra=extra)
         return response.choices[0].message.content
 
+    async def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        tool_choice: str = "auto",
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ):
+        """
+        带 Tool Calls 的对话：返回 OpenAI 风格的 message 对象（含 tool_calls）。
+
+        注意：这里直接接受已经构造好的原始 messages（dict 列表），
+        这样可以完整保留诸如 tool_call_id、name 等字段，避免通过
+        Pydantic Message 模型时被丢弃。
+        """
+        extra = self._completion_kwargs(temperature, max_tokens)
+        extra["tools"] = tools
+        extra["tool_choice"] = tool_choice
+        # messages 已经是形如 {"role": "...", "content": "...", ...} 的 dict
+        response = await self._create_completion(messages, stream=False, extra=extra)
+        return response.choices[0].message
+
     async def chat_stream(
         self,
         messages: List[Message],

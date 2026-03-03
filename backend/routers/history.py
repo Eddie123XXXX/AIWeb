@@ -90,7 +90,11 @@ async def get_conversation(conversation_id: str, user_id: CurrentUserId):
         created_at=conv["created_at"],
         updated_at=conv["updated_at"],
         messages=[
-            Message(role=Role(m["role"]) if m["role"] in ("system", "user", "assistant", "tool") else Role.USER, content=m["content"])
+            Message(
+                role=Role(m["role"]) if m["role"] in ("system", "user", "assistant", "tool") else Role.USER,
+                content=m["content"],
+                metadata=m.get("metadata"),
+            )
             for m in messages
         ],
     )
@@ -167,7 +171,11 @@ async def append_messages(conversation_id: str, user_id: CurrentUserId, body: Ap
         created_at=updated["created_at"],
         updated_at=updated["updated_at"],
         messages=[
-            Message(role=Role(m["role"]) if m["role"] in ("system", "user", "assistant", "tool") else Role.USER, content=m["content"])
+            Message(
+                role=Role(m["role"]) if m["role"] in ("system", "user", "assistant", "tool") else Role.USER,
+                content=m["content"],
+                metadata=m.get("metadata"),
+            )
             for m in messages
         ],
     )

@@ -14,11 +14,13 @@ import { RAGDashboard } from './pages/RAGDashboard';
 import { RAGSearch } from './pages/RAGSearch';
 import { Profile } from './pages/Profile';
 import { MemoryManageModal } from './components/MemoryManageModal';
+import { AddMCPServerModal } from './components/AddMCPServerModal';
 import { useTheme } from './hooks/useTheme';
 import { useChat } from './hooks/useChat';
 import { useTranslation } from './context/LocaleContext';
 
 const ATTACHMENTS_STORAGE_KEY = 'chat-file-attachments';
+const AGENTIC_MODE_STORAGE_KEY = 'chat-agentic-mode-map';
 
 function loadAttachmentsMap() {
   if (typeof window === 'undefined') return {};
@@ -57,6 +59,57 @@ function addConversationAttachment(conversationId, entry) {
   saveAttachmentsMap(map);
 }
 
+function normalizeAssistantHistoryContent(role, content) {
+  const text = typeof content === 'string' ? content : '';
+  if (role !== 'assistant') return text;
+  // 与实时渲染保持一致：隐藏历史消息中的 "Final Answer:" 前缀
+  return text.replace(/^Final Answer\s*:?\s*/i, '');
+}
+
+function loadAgenticModeMap() {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(AGENTIC_MODE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveAgenticModeMap(map) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(AGENTIC_MODE_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+function getConversationAgenticMode(conversationId) {
+  if (!conversationId) return null;
+  const map = loadAgenticModeMap();
+  const v = map[conversationId];
+  return typeof v === 'boolean' ? v : null;
+}
+
+function setConversationAgenticMode(conversationId, enabled) {
+  if (!conversationId) return;
+  const map = loadAgenticModeMap();
+  map[conversationId] = !!enabled;
+  saveAgenticModeMap(map);
+}
+
+function removeConversationAgenticMode(conversationId) {
+  if (!conversationId) return;
+  const map = loadAgenticModeMap();
+  if (Object.prototype.hasOwnProperty.call(map, conversationId)) {
+    delete map[conversationId];
+    saveAgenticModeMap(map);
+  }
+}
+
 export function App() {
   const { toggleTheme } = useTheme();
   const t = useTranslation();
@@ -89,9 +142,15 @@ export function App() {
       : null
   );
 
-  // 个人中心 / 记忆管理弹窗（不占用路由）
+  // Agentic 模式开关：仅前端态，控制工具按钮等 UI
+  const [agenticEnabled, setAgenticEnabled] = useState(false);
+  const [availableAgenticTools, setAvailableAgenticTools] = useState([]);
+  const [selectedAgenticTools, setSelectedAgenticTools] = useState([]);
+
+  // 个人中心 / 记忆管理 / MCP 添加弹窗（不占用路由）
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [memoryModalOpen, setMemoryModalOpen] = useState(false);
+  const [mcpModalOpen, setMcpModalOpen] = useState(false);
 
   // 用 state 存 token，登录成功后 setToken 触发重渲染，才能正确从登录页跳转到首页
   const [token, setTokenState] = useState(() => getStoredToken());
@@ -140,6 +199,35 @@ export function App() {
     };
   }, [token]);
 
+  const refreshAgenticTools = useCallback(async (newToolNames = []) => {
+    if (!token) return;
+    try {
+      const resp = await fetch(apiUrl('/api/agentic/tools'), { headers: getAuthHeaders() });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setAvailableAgenticTools(items);
+      setSelectedAgenticTools((prev) => {
+        const valid = new Set(items.map((t) => t.name));
+        const kept = prev.filter((name) => valid.has(name));
+        // 新增的 MCP 工具默认勾选
+        const withNew = new Set([...kept, ...newToolNames.filter((n) => valid.has(n))]);
+        return withNew.size ? Array.from(withNew) : items.map((t) => t.name);
+      });
+    } catch {
+      // ignore
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      setAvailableAgenticTools([]);
+      setSelectedAgenticTools([]);
+      return;
+    }
+    refreshAgenticTools();
+  }, [token, refreshAgenticTools]);
+
   const loadConversations = useCallback(
     async (onUnauthorized) => {
       const headers = getAuthHeaders();
@@ -175,11 +263,15 @@ export function App() {
 
   const handleRoundComplete = useCallback(
     (completedConversationId) => {
-      if (completedConversationId) setConversationId(completedConversationId);
+      if (completedConversationId) {
+        setConversationId(completedConversationId);
+        // 本轮结束后记录该会话的 agentic 开关状态，供历史会话恢复
+        setConversationAgenticMode(completedConversationId, agenticEnabled);
+      }
       // 首轮结束后后端会异步生成标题，延迟刷新侧栏列表以显示新标题
       setTimeout(() => loadConversations(() => setToken(null)), 2500);
     },
-    [loadConversations, setToken]
+    [loadConversations, setToken, agenticEnabled]
   );
 
   const {
@@ -189,7 +281,13 @@ export function App() {
     isStreaming,
     sendMessage,
     cancelStream,
-  } = useChat(conversationId, { onRoundComplete: handleRoundComplete });
+    agenticEvents,
+    agenticStatus,
+  } = useChat(conversationId, {
+    onRoundComplete: handleRoundComplete,
+    agenticEnabled,
+    enabledAgenticTools: selectedAgenticTools,
+  });
 
   const currentModel = useMemo(
     () =>
@@ -241,10 +339,16 @@ export function App() {
         if (!resp.ok) return;
         const detail = await resp.json();
         setConversationId(detail.id);
+        // 切换历史会话时，恢复该会话上次的 agentic 开关状态；无记录时保持当前状态
+        const savedAgentic = getConversationAgenticMode(detail.id);
+        if (savedAgentic !== null) {
+          setAgenticEnabled(savedAgentic);
+        }
 
         const baseMessages = (detail.messages || []).map((m) => ({
           role: m.role || 'user',
-          content: m.content || '',
+          content: normalizeAssistantHistoryContent(m.role || 'user', m.content || ''),
+          metadata: m.metadata || null,
         }));
 
         const attachments = getConversationAttachments(detail.id).slice().sort((a, b) => {
@@ -311,6 +415,7 @@ export function App() {
         });
         if (!resp.ok) return;
         setConversations((prev) => prev.filter((c) => c.id !== id));
+        removeConversationAgenticMode(id);
         if (conversationId === id) {
           setConversationId(null);
           setMessages([]);
@@ -499,6 +604,25 @@ export function App() {
 
   const hasChat = messages.length > 0 || !!streamingContent;
 
+  const handleToggleAgentic = useCallback(() => {
+    setAgenticEnabled((prev) => {
+      const next = !prev;
+      if (conversationId) {
+        setConversationAgenticMode(conversationId, next);
+      }
+      return next;
+    });
+  }, [conversationId]);
+
+  const handleToggleAgenticTool = useCallback((toolName, checked) => {
+    setSelectedAgenticTools((prev) => {
+      const set = new Set(prev);
+      if (checked) set.add(toolName);
+      else set.delete(toolName);
+      return Array.from(set);
+    });
+  }, []);
+
   const chatPage = (
     <div className="app-root">
       <Sidebar
@@ -523,17 +647,27 @@ export function App() {
           models={models}
           defaultModelId={defaultModelId}
           onModelChange={handleModelChange}
+          agenticEnabled={agenticEnabled}
+          onToggleAgentic={handleToggleAgentic}
         />
         <Welcome
           messages={messages}
           streamingContent={streamingContent}
           isStreaming={isStreaming}
+          agenticEnabled={agenticEnabled}
+          agenticEvents={agenticEvents}
+          agenticStatus={agenticStatus}
           onSend={handleSendWithModel}
           onCancelStream={cancelStream}
           onAttachFiles={handleAttachFiles}
           attachedFiles={quickParseFiles}
           attachError={attachError}
           onRemoveAttachedFile={handleRemoveAttachedFile}
+          showMore={agenticEnabled}
+          availableAgenticTools={availableAgenticTools}
+          selectedAgenticTools={selectedAgenticTools}
+          onToggleAgenticTool={handleToggleAgenticTool}
+          onOpenMcpModal={() => setMcpModalOpen(true)}
         />
         {hasChat && (
           <InputArea
@@ -545,6 +679,11 @@ export function App() {
             attachedFiles={quickParseFiles}
             attachError={attachError}
             onRemoveAttachedFile={handleRemoveAttachedFile}
+            showMore={agenticEnabled}
+            availableAgenticTools={availableAgenticTools}
+            selectedAgenticTools={selectedAgenticTools}
+            onToggleAgenticTool={handleToggleAgenticTool}
+            onOpenMcpModal={() => setMcpModalOpen(true)}
           />
         )}
       </main>
@@ -607,6 +746,15 @@ export function App() {
       )}
       {token && memoryModalOpen && (
         <MemoryManageModal onClose={() => setMemoryModalOpen(false)} />
+      )}
+      {token && mcpModalOpen && (
+        <AddMCPServerModal
+          onClose={() => setMcpModalOpen(false)}
+          onSuccess={(newToolNames) => {
+            setMcpModalOpen(false);
+            refreshAgenticTools(newToolNames);
+          }}
+        />
       )}
     </BrowserRouter>
   );

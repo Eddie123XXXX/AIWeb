@@ -2,6 +2,7 @@
 messages 表 CRUD，使用 asyncpg 连接 PostgreSQL。
 依赖: 已执行 db/schema_messages.sql 建表，且 conversations 表已存在。
 """
+import json
 import os
 from typing import Any
 
@@ -21,6 +22,25 @@ async def _get_conn() -> asyncpg.Connection:
     return await asyncpg.connect(_get_dsn())
 
 
+def _normalize_metadata(value: Any) -> dict[str, Any] | None:
+    """兼容 asyncpg 返回的 metadata 形态：dict / JSON 字符串 / 其他。"""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            obj = json.loads(value)
+            return obj if isinstance(obj, dict) else None
+        except json.JSONDecodeError:
+            return None
+    try:
+        # 兜底：如 asyncpg 返回可映射对象
+        return dict(value)
+    except Exception:
+        return None
+
+
 def _row_to_message(row: asyncpg.Record) -> dict[str, Any]:
     """将 messages 一行转为字典。"""
     return {
@@ -29,7 +49,7 @@ def _row_to_message(row: asyncpg.Record) -> dict[str, Any]:
         "role": row["role"],
         "content": row["content"],
         "token_count": row["token_count"],
-        "metadata": dict(row["metadata"]) if row["metadata"] else None,
+        "metadata": _normalize_metadata(row["metadata"]),
         "created_at": row["created_at"],
     }
 
@@ -58,7 +78,7 @@ class MessageRepository:
                 role,
                 content,
                 token_count,
-                asyncpg.Json(metadata) if metadata is not None else None,
+                json.dumps(metadata, ensure_ascii=False) if metadata is not None else None,
             )
             return _row_to_message(row)
         finally:
@@ -174,7 +194,7 @@ class MessageRepository:
         try:
             result = await conn.execute(
                 "UPDATE messages SET metadata = $1::jsonb WHERE id = $2",
-                asyncpg.Json(metadata),
+                json.dumps(metadata, ensure_ascii=False),
                 message_id,
             )
             return result.split()[-1] == "1"

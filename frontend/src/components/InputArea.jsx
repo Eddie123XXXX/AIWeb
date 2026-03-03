@@ -23,6 +23,10 @@ export function InputArea({
   onRemoveAttachedFile,
   showAttach = true,
   showMore = true,
+  availableAgenticTools = [],
+  selectedAgenticTools = [],
+  onToggleAgenticTool,
+  onOpenMcpModal,
 }) {
   const t = useTranslation();
   const [value, setValue] = useState('');
@@ -38,6 +42,7 @@ export function InputArea({
   const streamRef = useRef(null);
   const chunksRef = useRef([]);
   const [enteringFixed, setEnteringFixed] = useState(false);
+  const [expandedToolGroups, setExpandedToolGroups] = useState({});
 
   const handleSubmit = useCallback(() => {
     const text = (value + (interimTranscript || '')).trim();
@@ -400,22 +405,94 @@ export function InputArea({
               {showMore && (
                 <div className="input-box__more" ref={moreRef}>
                   <details>
-                    <summary title="更多选项">
-                      <span className="material-symbols-outlined">more_horiz</span>
+                    <summary title={t('toolsTitle')}>
+                      <span className="material-symbols-outlined">build</span>
                     </summary>
                     <div className="input-box__dropdown">
-                      <button type="button" className="input-box__dropdown-btn">
-                        <span className="material-symbols-outlined">description</span>
-                        <span>浏览本地文件</span>
-                      </button>
-                      <button type="button" className="input-box__dropdown-btn">
-                        <span className="material-symbols-outlined">mic_external_on</span>
-                        <span>语音输入设置</span>
-                      </button>
+                      {Array.isArray(availableAgenticTools) && availableAgenticTools.length > 0 ? (
+                        <div className="input-box__tool-list">
+                          {(() => {
+                            const groups = {};
+                            availableAgenticTools.forEach((tool) => {
+                              const key = tool.source === 'mcp' ? (tool.server || 'mcp') : '__builtin__';
+                              if (!groups[key]) groups[key] = [];
+                              groups[key].push(tool);
+                            });
+                            const builtinKey = '__builtin__';
+                            const sortedKeys = [
+                              ...(groups[builtinKey] ? [builtinKey] : []),
+                              ...Object.keys(groups).filter((k) => k !== builtinKey).sort(),
+                            ];
+                            return sortedKeys.map((groupKey) => {
+                              const tools = groups[groupKey];
+                              const isMcpGroup = groupKey !== builtinKey;
+                              const groupLabel = isMcpGroup ? groupKey : t('toolsGroupBuiltin');
+                              const isExpanded = expandedToolGroups[groupKey] ?? true;
+
+                              const handleToggleGroup = (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setExpandedToolGroups((prev) => ({
+                                  ...prev,
+                                  [groupKey]: !(prev[groupKey] ?? true),
+                                }));
+                              };
+
+                              const groupClass =
+                                'input-box__tool-group' + (isExpanded ? ' input-box__tool-group--expanded' : '');
+
+                              return (
+                                <div key={groupKey} className={groupClass}>
+                                  <button
+                                    type="button"
+                                    className="input-box__tool-group-header"
+                                    onClick={handleToggleGroup}
+                                  >
+                                    <span className="input-box__tool-group-arrow" />
+                                    <span className="input-box__tool-group-label">{groupLabel}</span>
+                                    <span className="input-box__tool-group-count">({tools.length})</span>
+                                    {isMcpGroup && <span className="input-box__tool-badge">MCP</span>}
+                                  </button>
+                                  {isExpanded && (
+                                    <div className="input-box__tool-group-body">
+                                      {tools.map((tool) => {
+                                        const name = tool?.name || '';
+                                        const checked = selectedAgenticTools.includes(name);
+                                        return (
+                                          <label key={name} className="input-box__tool-item" title={tool?.description || ''}>
+                                            <input
+                                              type="checkbox"
+                                              checked={checked}
+                                              onChange={(e) =>
+                                                onToggleAgenticTool && onToggleAgenticTool(name, e.target.checked)
+                                              }
+                                            />
+                                            <span className="input-box__tool-item-name">{name}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      ) : (
+                        <div className="input-box__dropdown-empty">{t('toolsEmpty')}</div>
+                      )}
                       <hr />
-                      <button type="button" className="input-box__dropdown-btn">
-                        <span className="material-symbols-outlined">tune</span>
-                        <span>回复偏好</span>
+                      <button
+                        type="button"
+                        className="input-box__dropdown-btn"
+                        onClick={() => {
+                          const details = moreRef.current?.querySelector('details');
+                          if (details) details.open = false;
+                          if (onOpenMcpModal) onOpenMcpModal();
+                        }}
+                      >
+                        <span className="material-symbols-outlined">add_circle</span>
+                        {t('toolsAddMcp')}
                       </button>
                     </div>
                   </details>

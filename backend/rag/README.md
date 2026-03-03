@@ -1,4 +1,11 @@
-# 📚 RAG 知识库模块
+# AIWeb RAG Module 📚
+
+## 快速导航
+
+- 主流程：上传 → 解析 → 切块 → 向量化 → 检索
+- 检索策略：三段式（召回 + RRF + Rerank）
+- 关键能力：Parent-Child 溯源、图片 Pipeline、来源指南
+- 接口入口：`/api/rag/*`
 
 将 PDF、Word、Excel 等文档解析为结构化内容，经版面感知切块与向量化后写入 Milvus + PostgreSQL，支持多路召回、Reranker 精排与 Parent-Child 溯源，为 AIWeb 提供「可检索、可溯源的智能上下文」。
 

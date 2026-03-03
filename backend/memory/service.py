@@ -20,6 +20,8 @@ EMBEDDING_MODEL = os.getenv("MEMORY_EMBEDDING_MODEL", "text-embedding-v4")
 
 # 评价/打分模型：使用 DeepSeek 的 chat 模型（支持 JSON 输出）
 SCORER_MODEL = os.getenv("MEMORY_SCORER_MODEL", "deepseek-chat")
+SIMILAR_MEMORY_THRESHOLD = float(os.getenv("MEMORY_SIMILARITY_THRESHOLD", "0.86"))
+SIMILAR_MEMORY_TOP_K = int(os.getenv("MEMORY_SIMILARITY_TOP_K", "8"))
 
 
 def _get_embedding_client() -> AsyncOpenAI:
@@ -157,6 +159,107 @@ async def _call_scorer_llm(
         return []
 
 
+def _distance_to_similarity(distance: float) -> float:
+    """
+    将 Milvus 距离映射为 [0,1] 相似度（经验映射）。
+    """
+    return 1.0 - max(0.0, min(2.0, float(distance))) / 2.0
+
+
+async def _find_similar_fact_memories(
+    *,
+    user_id: int,
+    content: str,
+    threshold: float = SIMILAR_MEMORY_THRESHOLD,
+    top_k: int = SIMILAR_MEMORY_TOP_K,
+) -> list[dict[str, Any]]:
+    """
+    检索与新记忆语义相近的已有 fact 记忆。
+    返回按相似度降序排序的候选（含 similarity_score）。
+    """
+    if not content.strip():
+        return []
+    query_embedding = (await _embed_texts([content]))[0]
+    search_result = await query_memories(
+        query_embeddings=[query_embedding],
+        where={"user_id": user_id},
+        n_results=max(1, top_k),
+    )
+    ids_rows = search_result.get("ids") or [[]]
+    distance_rows = search_result.get("distances") or [[]]
+    if not ids_rows or not ids_rows[0]:
+        return []
+
+    raw_ids: list[str] = [str(x) for x in ids_rows[0]]
+    raw_distances: list[float] = [float(x) for x in distance_rows[0]]
+    row_map = {str(r["id"]): r for r in await agent_memory_repository.get_by_ids(raw_ids)}
+
+    candidates: list[dict[str, Any]] = []
+    for mem_id, dist in zip(raw_ids, raw_distances):
+        row = row_map.get(mem_id)
+        if not row:
+            continue
+        if row.get("memory_type") != "fact":
+            continue
+        similarity = _distance_to_similarity(dist)
+        if similarity < threshold:
+            continue
+        item = dict(row)
+        item["similarity_score"] = similarity
+        candidates.append(item)
+
+    candidates.sort(key=lambda x: x.get("similarity_score", 0.0), reverse=True)
+    return candidates
+
+
+async def _call_merge_memory_llm(
+    *,
+    new_fact: str,
+    similar_memories: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """
+    将新事实与相似旧记忆合并为去重后的新事实。
+    """
+    if not similar_memories:
+        return {"merged_fact": new_fact}
+
+    client = _get_scorer_client()
+    existing_facts = []
+    for idx, mem in enumerate(similar_memories, start=1):
+        content = (mem.get("content") or "").strip()
+        if not content:
+            continue
+        existing_facts.append(f"{idx}. {content}")
+
+    prompt = (
+        "你是记忆去重助手。请将“新事实”与“已有相似记忆”合并成一条更完整、无重复、可长期保存的事实记忆。\n\n"
+        "【要求】\n"
+        "1. 使用第三人称客观陈述。\n"
+        "2. 避免重复，不要互相矛盾；若有冲突，保留更新、更具体的信息。\n"
+        "3. 输出 1 句话，尽量简洁但信息完整。\n"
+        "4. 返回 JSON：{\"merged_fact\": \"...\"}\n\n"
+        f"【新事实】\n{new_fact}\n\n"
+        "【已有相似记忆】\n"
+        + ("\n".join(existing_facts) if existing_facts else "(无)")
+    )
+    resp = await client.chat.completions.create(
+        model=SCORER_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=256,
+        response_format={"type": "json_object"},
+    )
+    raw = resp.choices[0].message.content or "{}"
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        data = {}
+    merged = (data.get("merged_fact") or "").strip() if isinstance(data, dict) else ""
+    if not merged:
+        merged = new_fact.strip()
+    return {"merged_fact": merged}
+
+
 async def extract_and_store_memories_for_round(
     *,
     user_id: int,
@@ -188,82 +291,164 @@ async def extract_and_store_memories_for_round(
     if not scored_items:
         return []
 
-    now = datetime.now(timezone.utc)
-
-    # 构造记忆对象
-    memories: list[ScoredMemory] = []
-    for item in scored_items:
-        mem_id = str(uuid4())
-        memories.append(
-            ScoredMemory(
-                id=mem_id,
-                user_id=user_id,
-                conversation_id=conversation_id,
-                content=item["content"],
-                memory_type=item.get("memory_type", "fact"),
-                importance_score=float(item.get("importance_score", 0.0)),
-                domain=item.get("domain", "general_chat"),
-                source_role=source_role,
-                source_message_id=source_message_id,
-                metadata={"conversation_id": conversation_id},
-            )
-        )
-
-    # 先向量化
-    embeddings = await _embed_texts([m.content for m in memories])
-
-    # 双写：PostgreSQL + Milvus（向量）
-    tasks = []
-    # 1) 写入 PostgreSQL
-    for mem in memories:
-        tasks.append(
-            agent_memory_repository.create(
-                id=mem.id,
-                user_id=mem.user_id,
-                conversation_id=mem.conversation_id,
-                memory_type=mem.memory_type,
-                domain=mem.domain,
-                source_role=mem.source_role,
-                source_message_id=mem.source_message_id,
-                content=mem.content,
-                metadata=mem.metadata,
-                vector_collection=vector_collection,
-                importance_score=mem.importance_score,
-                expires_at=None,
-            )
-        )
-
-    # 2) 写入 Milvus
-    # 将 user_id / conversation_id / content 等打进 metadata
-    vec_metadatas: list[dict[str, Any]] = []
-    for mem in memories:
-        md = dict(mem.metadata or {})
-        md.update(
-            {
-                "user_id": mem.user_id,
-                "conversation_id": mem.conversation_id,
-                "memory_type": mem.memory_type,
-                "domain": mem.domain,
-                "content": mem.content,
-            }
-        )
-        vec_metadatas.append(md)
-
-    tasks.append(
-        upsert_memories(
-            ids=[m.id for m in memories],
-            embeddings=embeddings,
-            metadatas=vec_metadatas,
-        )
-    )
-
-    results = await asyncio.gather(*tasks, return_exceptions=True)
     out: list[dict[str, Any]] = []
-    for r in results:
-        if isinstance(r, dict):
-            out.append(r)
-        elif isinstance(r, BaseException):
-            logger.warning("[Memory] 写入异常: %s", r)
+
+    # 当前打分器默认每轮返回 0/1 条，这里仍按列表处理以兼容后续扩展
+    create_candidates: list[ScoredMemory] = []
+    for item in scored_items:
+        content = (item.get("content") or "").strip()
+        if not content:
+            continue
+        memory_type = item.get("memory_type", "fact")
+        domain = item.get("domain", "general_chat")
+        importance = float(item.get("importance_score", 0.0))
+
+        # 仅对事实记忆进行去重合并；反思等类型保持原流程
+        if memory_type != "fact":
+            mem_id = str(uuid4())
+            create_candidates.append(
+                ScoredMemory(
+                    id=mem_id,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    content=content,
+                    memory_type=memory_type,
+                    importance_score=importance,
+                    domain=domain,
+                    source_role=source_role,
+                    source_message_id=source_message_id,
+                    metadata={"conversation_id": conversation_id},
+                )
+            )
+            continue
+
+        similar = await _find_similar_fact_memories(
+            user_id=user_id,
+            content=content,
+        )
+        if not similar:
+            mem_id = str(uuid4())
+            create_candidates.append(
+                ScoredMemory(
+                    id=mem_id,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    content=content,
+                    memory_type=memory_type,
+                    importance_score=importance,
+                    domain=domain,
+                    source_role=source_role,
+                    source_message_id=source_message_id,
+                    metadata={"conversation_id": conversation_id},
+                )
+            )
+            continue
+
+        # 命中相似记忆：合并后更新主记录，并清理其余重复记录，避免库内重复
+        merged_payload = await _call_merge_memory_llm(
+            new_fact=content,
+            similar_memories=similar,
+        )
+        merged_content = (merged_payload.get("merged_fact") or content).strip()
+        primary = similar[0]
+        all_importance = [importance] + [float(m.get("importance_score", 0.0)) for m in similar]
+        merged_importance = max(all_importance) if all_importance else importance
+
+        updated = await update_memory_and_reembed(
+            user_id=user_id,
+            memory_id=str(primary["id"]),
+            content=merged_content,
+            domain=domain,
+            importance_score=merged_importance,
+        )
+        if updated:
+            duplicate_ids = [str(m["id"]) for m in similar[1:]]
+            if duplicate_ids:
+                await agent_memory_repository.soft_delete_many(duplicate_ids)
+                await delete_memories(ids=duplicate_ids)
+                logger.info(
+                    "[Memory] 相似记忆已合并 | primary=%s merged_duplicates=%d",
+                    primary["id"],
+                    len(duplicate_ids),
+                )
+            updated["merged_from_ids"] = [str(m["id"]) for m in similar]
+            updated["merged_similarity_scores"] = {
+                str(m["id"]): float(m.get("similarity_score", 0.0)) for m in similar
+            }
+            out.append(updated)
+        else:
+            # 若更新失败，降级为新增，避免本轮记忆丢失
+            mem_id = str(uuid4())
+            create_candidates.append(
+                ScoredMemory(
+                    id=mem_id,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    content=merged_content,
+                    memory_type=memory_type,
+                    importance_score=importance,
+                    domain=domain,
+                    source_role=source_role,
+                    source_message_id=source_message_id,
+                    metadata={"conversation_id": conversation_id},
+                )
+            )
+
+    if create_candidates:
+        # 先向量化
+        embeddings = await _embed_texts([m.content for m in create_candidates])
+
+        # 双写：PostgreSQL + Milvus（向量）
+        tasks = []
+        # 1) 写入 PostgreSQL
+        for mem in create_candidates:
+            tasks.append(
+                agent_memory_repository.create(
+                    id=mem.id,
+                    user_id=mem.user_id,
+                    conversation_id=mem.conversation_id,
+                    memory_type=mem.memory_type,
+                    domain=mem.domain,
+                    source_role=mem.source_role,
+                    source_message_id=mem.source_message_id,
+                    content=mem.content,
+                    metadata=mem.metadata,
+                    vector_collection=vector_collection,
+                    importance_score=mem.importance_score,
+                    expires_at=None,
+                )
+            )
+
+        # 2) 写入 Milvus
+        # 将 user_id / conversation_id / content 等打进 metadata
+        vec_metadatas: list[dict[str, Any]] = []
+        for mem in create_candidates:
+            md = dict(mem.metadata or {})
+            md.update(
+                {
+                    "user_id": mem.user_id,
+                    "conversation_id": mem.conversation_id,
+                    "memory_type": mem.memory_type,
+                    "domain": mem.domain,
+                    "content": mem.content,
+                }
+            )
+            vec_metadatas.append(md)
+
+        tasks.append(
+            upsert_memories(
+                ids=[m.id for m in create_candidates],
+                embeddings=embeddings,
+                metadatas=vec_metadatas,
+            )
+        )
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for r in results:
+            if isinstance(r, dict):
+                out.append(r)
+            elif isinstance(r, BaseException):
+                logger.warning("[Memory] 写入异常: %s", r)
 
     # 阶段四：累加 importance 达阈值时触发反思
     if out:

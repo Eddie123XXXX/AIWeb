@@ -10,12 +10,20 @@ export function Welcome({
   messages,
   streamingContent,
   isStreaming,
+  agenticEnabled = false,
+  agenticEvents = [],
+  agenticStatus = null,
   onSend,
   onCancelStream,
   onAttachFiles,
   attachedFiles = [],
   attachError = null,
   onRemoveAttachedFile,
+  showMore = true,
+  availableAgenticTools = [],
+  selectedAgenticTools = [],
+  onToggleAgenticTool,
+  onOpenMcpModal,
 }) {
   const t = useTranslation();
   const user = getStoredUser();
@@ -49,6 +57,11 @@ export function Welcome({
             attachedFiles={attachedFiles}
             attachError={attachError}
             onRemoveAttachedFile={onRemoveAttachedFile}
+            showMore={showMore}
+            availableAgenticTools={availableAgenticTools}
+            selectedAgenticTools={selectedAgenticTools}
+            onToggleAgenticTool={onToggleAgenticTool}
+            onOpenMcpModal={onOpenMcpModal}
           />
         )}
 
@@ -56,6 +69,9 @@ export function Welcome({
           messages={messages}
           streamingContent={streamingContent}
           isStreaming={isStreaming}
+          agenticEnabled={agenticEnabled}
+          agenticEvents={agenticEvents}
+          agenticStatus={agenticStatus}
         />
       </div>
     </section>

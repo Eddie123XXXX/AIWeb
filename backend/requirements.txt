@@ -29,3 +29,4 @@ pdfplumber
 python-docx
 openpyxl
 pydub
+PyYAML>=6.0.0

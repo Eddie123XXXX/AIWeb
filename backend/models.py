@@ -24,6 +24,7 @@ class Message(BaseSchema):
     """单条消息"""
     role: Role
     content: str
+    metadata: Optional[dict] = Field(default=None, description="可选元数据（如 agentic_trace）")
 
 
 class QuickParseFile(BaseSchema):

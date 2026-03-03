@@ -10,6 +10,8 @@ export function Header({
   models,
   onModelChange,
   defaultModelId,
+  agenticEnabled,
+  onToggleAgentic,
 }) {
   const t = useTranslation();
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
@@ -102,6 +104,20 @@ export function Header({
           <span className="material-symbols-outlined" aria-hidden="true">
             {modelMenuOpen ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
           </span>
+        </button>
+        <button
+          type="button"
+          className={
+            'header__agentic-btn' + (agenticEnabled ? ' header__agentic-btn--active' : '')
+          }
+          title={t('agenticMode')}
+          aria-label={t('agenticMode')}
+          onClick={onToggleAgentic}
+        >
+          <span className="header__agentic-emoji" aria-hidden="true">
+            🤖
+          </span>
+          <span className="header__agentic-label">{t('agenticMode')}</span>
         </button>
         {modelMenuOpen && (
           <div className="header__model-menu" role="listbox">
