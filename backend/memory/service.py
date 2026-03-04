@@ -20,7 +20,7 @@ EMBEDDING_MODEL = os.getenv("MEMORY_EMBEDDING_MODEL", "text-embedding-v4")
 
 # 评价/打分模型：使用 DeepSeek 的 chat 模型（支持 JSON 输出）
 SCORER_MODEL = os.getenv("MEMORY_SCORER_MODEL", "deepseek-chat")
-SIMILAR_MEMORY_THRESHOLD = float(os.getenv("MEMORY_SIMILARITY_THRESHOLD", "0.86"))
+SIMILAR_MEMORY_THRESHOLD = float(os.getenv("MEMORY_SIMILARITY_THRESHOLD", "0.7"))
 SIMILAR_MEMORY_TOP_K = int(os.getenv("MEMORY_SIMILARITY_TOP_K", "8"))
 
 
@@ -777,10 +777,67 @@ async def create_memory_manual(
     importance_score: float = 0.5,
 ) -> dict[str, Any]:
     """
-    用户手动新增一条记忆：写 PG + 向量化 + 写 Milvus。
+    用户手动新增一条记忆：默认行为为写 PG + 向量化 + 写 Milvus。
+    对于 memory_type='fact' 的记忆，会复用自动写入路径的「相似记忆检索 + LLM 合并」逻辑，
+    尽量避免产生语义重复的多条 fact。
     """
     from uuid import uuid4
 
+    content = (content or "").strip()
+    if not content:
+        raise ValueError("content 不能为空")
+
+    norm_importance = max(0.0, min(1.0, float(importance_score)))
+
+    # 仅对事实记忆做去重合并，其它类型保持原有「直接新增」逻辑
+    if memory_type == "fact":
+        # 1) 检索相似 fact 记忆
+        similar = await _find_similar_fact_memories(
+            user_id=user_id,
+            content=content,
+        )
+        if similar:
+            # 2) 调用 LLM 合并新旧记忆
+            merged_payload = await _call_merge_memory_llm(
+                new_fact=content,
+                similar_memories=similar,
+            )
+            merged_content = (merged_payload.get("merged_fact") or content).strip()
+            primary = similar[0]
+
+            # 3) 重要性取当前与历史中的最大值
+            all_importance = [norm_importance] + [
+                float(m.get("importance_score", 0.0)) for m in similar
+            ]
+            merged_importance = max(all_importance) if all_importance else norm_importance
+
+            # 4) 更新主记录内容 + 重要性，并重新向量化
+            updated = await update_memory_and_reembed(
+                user_id=user_id,
+                memory_id=str(primary["id"]),
+                content=merged_content,
+                domain=domain,
+                importance_score=merged_importance,
+            )
+            if updated:
+                # 5) 其余相似记录做软删除 + Milvus 删除，避免库内重复
+                duplicate_ids = [str(m["id"]) for m in similar[1:]]
+                if duplicate_ids:
+                    await agent_memory_repository.soft_delete_many(duplicate_ids)
+                    await delete_memories(ids=duplicate_ids)
+                    logger.info(
+                        "[Memory] 手动新增触发相似记忆合并 | primary=%s merged_duplicates=%d",
+                        primary["id"],
+                        len(duplicate_ids),
+                    )
+                updated["merged_from_ids"] = [str(m["id"]) for m in similar]
+                updated["merged_similarity_scores"] = {
+                    str(m["id"]): float(m.get("similarity_score", 0.0)) for m in similar
+                }
+                return updated
+            # 若更新失败，降级为走「直接新增」逻辑，避免本次记忆丢失
+
+    # 默认：直接新增一条记忆 + 写入向量
     mem_id = str(uuid4())
     await agent_memory_repository.create(
         id=mem_id,
@@ -789,17 +846,34 @@ async def create_memory_manual(
         memory_type=memory_type,
         domain=domain,
         vector_collection="agent_memories",
-        importance_score=max(0.0, min(1.0, importance_score)),
+        importance_score=norm_importance,
         expires_at=None,
     )
     embeddings = await _embed_texts([content])
     await upsert_memories(
         ids=[mem_id],
         embeddings=embeddings,
-        metadatas=[{"user_id": user_id, "domain": domain, "content": content, "memory_type": memory_type}],
+        metadatas=[
+            {
+                "user_id": user_id,
+                "domain": domain,
+                "content": content,
+                "memory_type": memory_type,
+            }
+        ],
     )
     row = await agent_memory_repository.get_by_ids([mem_id])
-    return row[0] if row else {"id": mem_id, "content": content, "domain": domain, "memory_type": memory_type, "importance_score": importance_score}
+    return (
+        row[0]
+        if row
+        else {
+            "id": mem_id,
+            "content": content,
+            "domain": domain,
+            "memory_type": memory_type,
+            "importance_score": norm_importance,
+        }
+    )
 
 
 async def update_memory_and_reembed(

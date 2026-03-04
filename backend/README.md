@@ -33,7 +33,7 @@
 - 🎤 **语音识别（ASR）**：`POST /api/asr/transcribe`，浏览器上传音频（如 webm），后端转 MP3 后调用 Qwen3-ASR-Flash；需 `DASHSCOPE_API_KEY` 或 `QWEN_API_KEY`，非 MP3/WAV 需 ffmpeg
 - 🧠 **记忆管理 API**：`GET/POST/PUT/DELETE /api/memory/*`，支持列表、新增、编辑、删除记忆；编辑时重新计算 embedding
 - 🔐 **JWT 认证**：登录签发 token，`backend/.env` 中 `JWT_SECRET`、`JWT_EXPIRE_SECONDS` 等
-- 🧩 **Agentic 模式（ReAct + 工具调用）**：`/api/agentic/ws` 流式 Thought / Action / Observation / Final Answer，`/api/agentic/chat` 非流式；支持内置工具（记忆 / RAG / Quick Parse 等）、SkillTool（`backend/agentic/SKILLS`）与 MCP 工具（`/api/agentic/mcp-servers` 与 `/api/agentic/mcp-servers/add`）
+- 🧩 **Agentic 模式（ReAct + 工具调用）**：`/api/agentic/ws` token 级流式（`stream_delta`、`observation_delta`）+ Thought / Action / Observation / Final Answer，`/api/agentic/chat` 非流式；内置工具：`user_memory`、`knowledge_search`、`web_search`、`data_analyzer`、`chart_generator`；支持 SkillTool（`backend/agentic/SKILLS`）与 MCP 工具（`/api/agentic/mcp-servers` 与 `/api/agentic/mcp-servers/add`）
 
 ## 🚀 快速开始
 

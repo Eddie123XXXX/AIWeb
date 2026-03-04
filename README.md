@@ -46,9 +46,9 @@
   - **上传反馈**：同笔记本重复上传返回 409；不支持的文件类型返回 400，前端展示「重复上传」「不支持格式」等提示；解析中可打开「解析等待」弹窗玩贪吃蛇
 
 - 🧩 **Agentic 模式 & 工具调用（`backend/agentic`）**
-  - ReAct 工作流：Thought / Action / Observation / Final Answer，全程流式输出
-  - 工具来源：内置工具（记忆 / RAG / Quick Parse / Web Search 示例等）、Skills 系统（`backend/agentic/SKILLS`）、MCP Server（通过 `/api/agentic/mcp-servers` 管理）
-  - 前端在聊天页提供 Agentic 开关与推理面板，按会话记住开关状态，可勾选启用的工具列表并一键添加 MCP Server
+  - ReAct 工作流：token 级流式（`stream_delta`、`observation_delta`）+ Thought / Action / Observation / Final Answer
+  - 内置工具：`user_memory`、`knowledge_search`、`web_search`、`data_analyzer`、`chart_generator`；Skills 系统（`backend/agentic/SKILLS`）；MCP Server（通过 `/api/agentic/mcp-servers` 管理）
+  - 前端在聊天页提供 Agentic 开关与推理面板，按会话记住开关状态，可勾选启用的工具列表并一键添加 MCP Server；支持 ECharts 图表渲染
 
 - 🧱 **基础运维与基础设施集成**
   - `infra/docker-compose.yml` 一键拉起 PostgreSQL / Redis / MinIO / Milvus / RabbitMQ / Elasticsearch 等依赖服务
@@ -170,9 +170,10 @@
 - [ ] 个人中心页面优化
 - [ ] RAG 系统更多格式文件支持及测试
 - [ ] RAG 功能优化
-- [ ] 联网搜索
+- [x] 联网搜索
 - [ ] 深度搜索功能及页面
-- [ ] mcp接口
+- [x] mcpRemote接口
+- [x] mcpLocal接口
 - [ ] skill接口待完善
 - [ ] 临时对话
 

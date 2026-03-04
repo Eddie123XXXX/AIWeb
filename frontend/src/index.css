@@ -2,6 +2,8 @@
 :root,
 [data-theme="light"] {
   --color-primary: #3b82f6;
+  /* 作为全局强调色，默认与 primary 保持一致 */
+  --color-accent: #3b82f6;
   --color-background-main: #F0F2F5;
   --color-sidebar-bg: #F7F8FA;
   --color-charcoal: #1F2937;
@@ -22,6 +24,8 @@
 
 [data-theme="dark"] {
   --color-primary: #3b82f6;
+  /* 暗色下稍微提亮强调色，以保证对比度 */
+  --color-accent: #60a5fa;
   --color-background-main: #0F0F10;
   --color-sidebar-bg: #18181B;
   --color-charcoal: #E5E7EB;
@@ -4916,4 +4920,125 @@ button.rag-notebook-card {
 
 .rag-input-box__send:hover {
   color: #2563eb;
+}
+
+/* ===== ECharts 图表渲染 ===== */
+
+.echart-wrapper {
+  margin: 1rem 0;
+  border-radius: 12px;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.echart-title {
+  padding: 0.75rem 1rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-charcoal);
+}
+
+.echart-portal {
+  width: 100%;
+}
+
+.echart-error {
+  padding: 1rem;
+  color: #ef4444;
+  font-size: 0.85rem;
+  background: #fef2f2;
+  border-radius: 8px;
+  margin: 0.5rem 0;
+}
+
+[data-theme="dark"] .echart-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+}
+
+.echart-loading {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-charcoal-light);
+  font-size: 0.85rem;
+}
+
+/* 表格 */
+
+.echart-table-wrapper {
+  margin: 1rem 0;
+  border-radius: 12px;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.echart-table-scroll {
+  overflow-x: auto;
+}
+
+.echart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.echart-table th {
+  background: var(--hover-bg);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 2px solid var(--color-card-border);
+  white-space: nowrap;
+  color: var(--color-charcoal);
+}
+
+.echart-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-card-border);
+  color: var(--color-charcoal);
+}
+
+.echart-table tr:last-child td {
+  border-bottom: none;
+}
+
+.echart-table tr:hover td {
+  background: var(--hover-bg);
+}
+
+.echart-table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--color-card-border);
+  font-size: 0.8rem;
+  color: var(--color-charcoal-light);
+}
+
+.echart-table-pagination button {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--color-card-border);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--color-charcoal);
+  transition: all 0.15s;
+}
+
+.echart-table-pagination button:hover:not(:disabled) {
+  background: var(--hover-bg);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.echart-table-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

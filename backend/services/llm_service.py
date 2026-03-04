@@ -99,9 +99,30 @@ class LLMService:
         extra = self._completion_kwargs(temperature, max_tokens)
         extra["tools"] = tools
         extra["tool_choice"] = tool_choice
-        # messages 已经是形如 {"role": "...", "content": "...", ...} 的 dict
         response = await self._create_completion(messages, stream=False, extra=extra)
         return response.choices[0].message
+
+    async def stream_chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        tool_choice: str = "auto",
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> AsyncGenerator:
+        """
+        带 Tool Calls 的流式对话：逐 chunk 返回 OpenAI streaming delta。
+
+        每个 chunk 的 choices[0].delta 可能包含：
+        - delta.content: 文本 token
+        - delta.tool_calls: 工具调用的增量片段
+        """
+        extra = self._completion_kwargs(temperature, max_tokens)
+        extra["tools"] = tools
+        extra["tool_choice"] = tool_choice
+        response = await self._create_completion(messages, stream=True, extra=extra)
+        async for chunk in response:
+            yield chunk
 
     async def chat_stream(
         self,

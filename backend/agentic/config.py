@@ -24,7 +24,7 @@ class LLMConfig(BaseModel):
     )
     enable_stream_thought: bool = Field(
         default=True,
-        description="是否通过 WebSocket 流式把 Thought 透传给前端",
+        description="是否通过 WebSocket 将 Thought 逐 token 流式透传给前端（stream_delta）",
     )
     max_total_seconds: int = Field(
         default=600,

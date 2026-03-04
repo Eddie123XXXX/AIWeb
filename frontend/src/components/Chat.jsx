@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { AgenticReasoningPanel } from './AgenticReasoningPanel';
 
+const STREAM_DEBOUNCE_MS = 60;
+
 /** 找到第一个可滚动的祖先，在其内部滚到底部，避免滚动整页导致「界面翻上去」 */
 function scrollChatContainerToBottom(endEl) {
   if (!endEl) return;
@@ -28,6 +30,33 @@ export function Chat({
 }) {
   const endRef = useRef(null);
   const [panelExpanded, setPanelExpanded] = useState(false);
+
+  // 流式内容防抖：减少图表+文字混合时的屏闪（每 120ms 批量更新，避免逐 token 全量重绘）
+  const [streamingDisplay, setStreamingDisplay] = useState('');
+  const debounceRef = useRef(null);
+  const prevContentRef = useRef('');
+  useEffect(() => {
+    if (!streamingContent) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+      prevContentRef.current = '';
+      setStreamingDisplay('');
+      return;
+    }
+    // 首 token 立即显示，后续更新防抖
+    if (!prevContentRef.current) {
+      setStreamingDisplay(streamingContent);
+    } else {
+      debounceRef.current = setTimeout(() => {
+        debounceRef.current = null;
+        setStreamingDisplay(streamingContent);
+      }, STREAM_DEBOUNCE_MS);
+    }
+    prevContentRef.current = streamingContent;
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [streamingContent]);
 
   const getTraceForUserAt = (userIndex) => {
     for (let j = userIndex + 1; j < messages.length; j += 1) {
@@ -58,7 +87,7 @@ export function Chat({
         scrollChatContainerToBottom(endEl);
       });
     });
-  }, [messages, streamingContent]);
+  }, [messages, streamingContent, streamingDisplay]);
 
   return (
     <div className="chat" id="chatMessages" aria-live="polite">
@@ -111,10 +140,10 @@ export function Chat({
         />
       )}
 
-      {streamingContent ? (
+      {streamingDisplay ? (
         <ChatMessage
           role="assistant"
-          content={streamingContent || '...'}
+          content={streamingDisplay || '...'}
           isMarkdown
         />
       ) : null}

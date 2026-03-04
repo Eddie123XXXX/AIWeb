@@ -65,54 +65,74 @@ app.add_middleware(
 def build_system_prompt(
     custom_prompt: Optional[str],
     enabled_tools: Optional[list[str]] = None,
+    agent_name: str = "supervisor",
 ) -> str:
     """
-    构建 Agentic 模式下的基础 System Prompt：
+    构建 Agentic 模式下的基础 System Prompt。
+
     - 若用户传入自定义 system_prompt，则直接使用；
-    - 否则生成一段 ReAct 说明 + 动态工具列表。
+    - 否则根据当前 agent 的工具集自动生成：
+      - 若存在 WorkerTool 类型的工具，生成 Supervisor 路由型 Prompt
+      - 否则生成标准执行型 Prompt
     """
     if custom_prompt and custom_prompt.strip():
         return custom_prompt
 
-    header = """
-You are an enterprise AI assistant with tools. You MUST strictly follow the ReAct protocol:
+    from .tools import WorkerTool
 
-1. Always reason step by step using:
-   Thought: <your reasoning in natural language>
-
-2. When you decide to use a tool, you MUST emit an Action line whose content is a STRICT JSON object:
-   Action: {"tool": "<tool_name>", "parameters": { ... }}
-
-3. When you receive the result of a tool, the backend will send it back to you as an Observation. You must read it and then either:
-   - continue with another Thought + Action, or
-   - give the Final Answer.
-
-4. When you are ready to respond to the user, you MUST output:
-   Final Answer: <your final answer to the user>
-
-Available tools (for Action.tool):
-""".strip()
-
-    # 动态列出当前注册的所有工具名称与描述
+    available_tools = registry.get_tools_for(agent_name)
     enabled_set = {str(x) for x in enabled_tools} if enabled_tools is not None else None
-    tool_lines: list[str] = []
-    for tool in registry.tools.values():
-        if enabled_set is not None and tool.name not in enabled_set:
-            continue
-        desc = getattr(tool, "description", "") or ""
-        tool_lines.append(f'- "{tool.name}": {desc}')
+    filtered_tools = [
+        t for t in available_tools
+        if enabled_set is None or t.name in enabled_set
+    ]
 
-    tools_block = "\n".join(tool_lines) if tool_lines else "- (no tools registered)"
+    has_workers = any(isinstance(t, WorkerTool) for t in filtered_tools)
+    worker_tools = [t for t in filtered_tools if isinstance(t, WorkerTool)]
+    direct_tools = [t for t in filtered_tools if not isinstance(t, WorkerTool)]
 
-    tail = """
-Important rules:
-- The Action line MUST contain valid JSON. Do NOT put natural language after the JSON. Do NOT output multiple JSON objects in one Action.
-- On each turn, you MUST output at least a Thought, and then either an Action or a Final Answer.
+    if has_workers:
+        header = (
+            "You are a Supervisor AI — a task dispatcher that coordinates specialized expert agents.\n\n"
+            "Core principles:\n"
+            "1. Do NOT answer domain-specific questions yourself. Delegate to the appropriate Worker agent.\n"
+            "2. If a question spans multiple domains, call multiple Workers sequentially and synthesize their results.\n"
+            "3. After receiving all Worker reports, produce a coherent Final Answer for the user.\n"
+        )
 
-Reply in Chinese when the user speaks Chinese.
-""".strip()
+        tool_lines: list[str] = []
+        if worker_tools:
+            tool_lines.append("\n**Expert Workers (delegate domain tasks to them):**")
+            for t in worker_tools:
+                desc = getattr(t, "description", "") or ""
+                tool_lines.append(f'- "{t.name}": {desc}')
+        if direct_tools:
+            tool_lines.append("\n**Direct Tools (you can call these yourself):**")
+            for t in direct_tools:
+                desc = getattr(t, "description", "") or ""
+                tool_lines.append(f'- "{t.name}": {desc}')
 
-    return f"{header}\n{tools_block}\n\n{tail}"
+        tools_block = "\n".join(tool_lines) if tool_lines else "- (no tools registered)"
+    else:
+        header = (
+            "You are an enterprise AI assistant with tools.\n"
+            "You have access to the following tools. Use them when needed to answer the user's question.\n\n"
+            "Available tools:\n"
+        )
+        tool_lines = []
+        for t in filtered_tools:
+            desc = getattr(t, "description", "") or ""
+            tool_lines.append(f'- "{t.name}": {desc}')
+        tools_block = "\n".join(tool_lines) if tool_lines else "- (no tools registered)"
+
+    tail = (
+        "\nImportant rules:\n"
+        "- Think step by step before acting.\n"
+        "- When you are ready to respond to the user, provide your Final Answer directly.\n"
+        "- Reply in Chinese when the user speaks Chinese.\n"
+    )
+
+    return f"{header}{tools_block}\n{tail}"
 
 
 async def _get_agentic_history_messages(conversation_id: Optional[str]) -> list[dict[str, str]]:
@@ -138,16 +158,25 @@ async def _get_agentic_history_messages(conversation_id: Optional[str]) -> list[
 @router.get("/tools")
 async def list_agentic_tools() -> Dict[str, Any]:
     """
-    返回当前后端已注册的 Agentic 工具列表（含 MCP 动态工具），供前端做动态勾选。
+    返回当前后端已注册的 Agentic 工具列表（含 MCP 动态工具与 Worker），供前端做动态勾选。
     """
+    from .tools import WorkerTool
+
     items = []
     for tool in registry.tools.values():
         is_mcp = hasattr(tool, "_server")
+        is_worker = isinstance(tool, WorkerTool)
+        if is_mcp:
+            source = "mcp"
+        elif is_worker:
+            source = "worker"
+        else:
+            source = "builtin"
         items.append(
             {
                 "name": tool.name,
                 "description": getattr(tool, "description", "") or "",
-                "source": "mcp" if is_mcp else "builtin",
+                "source": source,
                 "server": tool._server.name if is_mcp else None,
             }
         )
@@ -256,20 +285,18 @@ async def add_mcp_server(req: AddMCPServerRequest) -> Dict[str, Any]:
 @router.websocket("/ws")
 async def agentic_ws(websocket: WebSocket) -> None:
     """
-    前端 Agentic 模式的主入口。
+    Agentic 模式主入口（WebSocket 流式）。
 
-    交互协议（建议）：
-    - 前端连接后，先发送一条 JSON：
-      {
-        "user_query": "帮我查一下那个图纸审核项目的 YOLO 模型部署在哪个服务器...",
-        "system_prompt": "...你写好的 ReAct Prompt..."
-      }
-    - 后端在循环中通过 WebSocket 发送 JSON：
-      { "event": "thought", "step": 0, "content": "AI 正在检索记忆..." }
-      { "event": "action", "step": 0, "tool": "query_user_memory", "parameters": {...} }
-      { "event": "observation", "step": 0, "content": "记忆显示：YOLOv8 部署在 192.168.1.100 ..." }
-      ...
-      { "event": "final_answer", "content": "根据您的记忆记录..." }
+    请求：连接后发送 JSON，含 user_query、system_prompt（可选）、model_id、conversation_id、enabled_tools 等。
+
+    响应事件（按序推送）：
+    - stream_delta: 逐 token 流式输出（thought 或最终回答）
+    - thought: 完整思考内容（流结束后）
+    - action: 工具调用（tool、parameters）
+    - observation_delta: 工具结果流式块
+    - observation: 工具结果完整内容
+    - final_answer: 最终回答
+    - error: 异常信息
     """
     await websocket.accept()
     try:
@@ -335,10 +362,13 @@ async def agentic_ws(websocket: WebSocket) -> None:
 
     trace_events: list[dict[str, Any]] = []
 
+    async def on_stream_delta(token: str) -> None:
+        """LLM 逐 token 推送——真正的流式体验。"""
+        await send_json({"event": "stream_delta", "content": token})
+
     async def on_thought(thought: str, step: int) -> None:
         trace_events.append({"type": "thought", "step": step, "content": thought})
-        if settings.llm.enable_stream_thought:
-            await send_json({"event": "thought", "step": step, "content": thought})
+        await send_json({"event": "thought", "step": step, "content": thought})
 
     async def on_action(tool: str, parameters: Dict[str, Any], step: int) -> None:
         trace_events.append(
@@ -358,6 +388,10 @@ async def agentic_ws(websocket: WebSocket) -> None:
                 "parameters": parameters,
             },
         )
+
+    async def on_observation_delta(chunk: str, step: int) -> None:
+        """工具结果流式推送——逐块发送，前端可实时显示。"""
+        await send_json({"event": "observation_delta", "step": step, "content": chunk})
 
     async def on_observation(content: str, step: int) -> None:
         trace_events.append({"type": "observation", "step": step, "content": content})
@@ -413,7 +447,9 @@ async def agentic_ws(websocket: WebSocket) -> None:
             on_thought=on_thought,
             on_action=on_action,
             on_observation=on_observation,
+            on_observation_delta=on_observation_delta,
             on_final_answer=on_final_answer,
+            on_stream_delta=on_stream_delta,
         )
     except WebSocketDisconnect:
         # 前端断开时静默退出
@@ -432,8 +468,10 @@ async def agentic_ws(websocket: WebSocket) -> None:
 @router.post("/chat")
 async def agentic_http_chat(req: AgenticChatRequest) -> Dict[str, Any]:
     """
-    HTTP 版入口：不需要流式，仅返回最终答案。
-    方便在前端不需要展示 Thought 细节时调用。
+    Agentic 模式 HTTP 入口（非流式）。
+
+    执行完整 ReAct 循环后返回 final_answer，不推送 thought/action/observation 事件。
+    适用于不需要推理面板的前端场景。
     """
     settings = get_settings()
     model_id = req.model_id or "default"

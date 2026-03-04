@@ -13,14 +13,17 @@
 
 - `backend/requirements.txt`：本后端所需依赖（FastAPI / httpx / pydantic 等）
 - `backend/agentic/main.py`：FastAPI 应用入口，包含：
-  - `WebSocket /api/agentic/ws`：Agentic 模式主入口（流式 Thought / Action / Observation / Final Answer）
+  - `WebSocket /api/agentic/ws`：Agentic 模式主入口（token 级流式 + 工具结果流式）
   - `POST /api/agentic/chat`：非流式 HTTP 入口（仅返回最终回答）
 - `backend/agentic/agent_loop.py`：核心 Agent Loop 实现（含 MAX_STEPS 熔断与 Error Observation）
 - `backend/agentic/llm_client.py`：LLM 调用封装，假定使用 OpenAI 兼容 `/v1/chat/completions` 接口
 - `backend/agentic/tools_base.py`：Tool 标准接口定义（Tool / ToolContext / ToolExecutionError）
 - `backend/agentic/tools_registry.py`：工具注册中心，内置：
-  - `query_user_memory`：用户记忆检索（需对接你的 memory 模块）
-  - `query_rag_knowledge`：RAG 知识库检索（需对接你的 rag 模块）
+  - `user_memory`：用户记忆检索（对接 memory 模块）
+  - `knowledge_search`：RAG 知识库检索（对接 rag 模块）
+  - `web_search`：联网搜索
+  - `data_analyzer`：智能数据分析（趋势/分布/对比/异常检测）
+  - `chart_generator`：ECharts 图表生成（折线/柱状/饼图/散点/表格）
   - `SkillTool`：skills 占位（将系统中的技能封装为 Tool）
   - `MCPTool`：MCP 工具包装器，通过 `MCPClient` 调用 MCP Server
 - `backend/agentic/mcp_client.py`：MCP 客户端占位实现（统一 `invoke(server_name, tool_name, arguments)` 接口）
@@ -66,21 +69,25 @@ export OPENAI_BASE_URL="https://api.openai.com/v1"  # 或你的代理地址
 后端在 Agent Loop 中会按步骤流式推送事件，典型序列如下：
 
 ```json
+{ "event": "stream_delta", "content": "用" }
+{ "event": "stream_delta", "content": "户" }
+...
 { "event": "thought", "step": 0, "content": "用户询问了图纸审核项目中的 YOLO 模型服务器位置..." }
-{ "event": "action", "step": 0, "tool": "query_user_memory", "parameters": {"domain": "vision_cad_agent", "query": "YOLO模型部署服务器位置"} }
-{ "event": "observation", "step": 0, "content": "Observation: 记忆显示：YOLOv8 模型目前部署在 192.168.1.100 的 GPU 节点上。" }
-{ "event": "thought", "step": 1, "content": "我已经拿到了服务器位置，现在需要查 RAG 知识库里的文档配置。" }
-{ "event": "action", "step": 1, "tool": "query_rag_knowledge", "parameters": {"notebook_id": "cad-123", "query": "YOLO 部署配置文件"} }
-{ "event": "observation", "step": 1, "content": "Observation: 从知识库检索到的配置文档显示，对应的端口号为 8080，配置文件路径在 /opt/yolo/config.yaml。" }
-{ "event": "final_answer", "content": "根据您的记忆记录，YOLO 模型目前部署在 192.168.1.100 的 GPU 节点上，同时，从知识库检索到的配置文档显示，对应的端口号为 8080，配置文件路径在 /opt/yolo/config.yaml。" }
+{ "event": "action", "step": 0, "tool": "user_memory", "parameters": {"domain": "vision_cad_agent", "query": "YOLO模型部署服务器位置"} }
+{ "event": "observation_delta", "step": 0, "content": "从用户长期记忆中检索到" }
+{ "event": "observation", "step": 0, "content": "Observation: 记忆显示：YOLOv8 部署在 192.168.1.100 ..." }
+...
+{ "event": "final_answer", "content": "根据您的记忆记录...", "conversation_id": "xxx" }
 ```
 
-前端可以根据 `event` 字段做不同 UI 展示，例如：
+事件说明：
 
-- `thought`：灰色斜体小字，显示「AI 正在检索记忆…」「AI 正在查阅 RAG 知识库…」
-- `action`：可选地展示「正在调用 xxx 工具」
-- `observation`：展示工具执行结果或错误信息
-- `final_answer`：作为最终回复渲染到聊天气泡中
+- `stream_delta`：LLM 逐 token 流式输出，前端实时渲染
+- `thought`：完整思考内容（流结束后）
+- `action`：工具调用（tool、parameters）
+- `observation_delta`：工具结果流式块
+- `observation`：工具结果完整内容
+- `final_answer`：最终回答，渲染到聊天气泡
 
 ### 4. skills 与 MCP 接入说明
 

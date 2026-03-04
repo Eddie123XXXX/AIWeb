@@ -39,10 +39,11 @@ frontend/
 │   │   ├── Header.jsx    # 顶栏（主题切换、模型选择等）
 │   │   ├── Welcome.jsx   # 欢迎区 + 聊天列表容器
 │   │   ├── Chat.jsx      # 消息列表
-│   │   ├── ChatMessage.jsx   # 单条消息（支持 Markdown/代码高亮/复制）
+│   │   ├── ChatMessage.jsx   # 单条消息（支持 Markdown/代码高亮/复制/ECharts 图表）
 │   │   ├── InputArea.jsx     # 输入框与发送（含附件、语音）
 │   │   ├── MemoryManageModal.jsx      # 记忆管理浮窗（列表/新增/编辑/删除）
-│   │   ├── AgenticReasoningPanel.jsx  # Agentic 推理过程面板（展示 Thought/Action/Observation 事件流）
+│   │   ├── AgenticReasoningPanel.jsx  # Agentic 推理过程面板（stream_delta/thought/action/observation_delta/observation/final_answer）
+│   │   ├── EChartsRenderer.jsx        # ECharts 图表渲染（chart_generator 工具输出）
 │   │   ├── AddMCPServerModal.jsx      # 添加 MCP Server 弹窗（一键发现并勾选 MCP 工具）
 │   │   └── SnakeGame.jsx              # 贪吃蛇小游戏（解析等待弹窗内）
 │   ├── hooks/
@@ -115,7 +116,7 @@ npm run preview
 - 📎 **Quick Parse 文件预览**：`InputArea` 支持附件上传与校验；`ChatMessage` 以文件卡片展示并提示不进入长期记忆。
 - 🧠 **记忆管理**：侧栏/用户菜单提供「记忆管理」入口，`MemoryManageModal` 浮窗内可列表、新增、编辑、删除记忆；编辑会触发后端重新向量化。
 - 🎤 **语音输入**：`InputArea` 支持麦克风录音；安全上下文（localhost/https）下使用 Web Speech API，否则上传 webm 走后端 ASR（Qwen3-ASR-Flash）。
-- 🧩 **Agentic 推理与工具调用**：`Header` 提供 Agentic 模式开关；开启后 `useChat` 在后台切换使用 Agentic 后端接口（`/api/agentic/*`），`AgenticReasoningPanel` 在聊天区顶部展示 Thought / Action / Observation 事件流；`Welcome` 与 `InputArea` 右下「更多」区域展示可用工具列表，并可通过 `AddMCPServerModal` 一键添加 MCP Server。
+- 🧩 **Agentic 推理与工具调用**：`Header` 提供 Agentic 模式开关；开启后 `useChat` 切换使用 Agentic WebSocket（`/api/agentic/ws`），支持 token 级流式（`stream_delta`）与工具结果流式（`observation_delta`）；`AgenticReasoningPanel` 展示 thought / action / observation 事件流；`EChartsRenderer` 渲染 `chart_generator` 生成的图表；`Welcome` 与 `InputArea` 右下「更多」区域展示可用工具列表，可通过 `AddMCPServerModal` 一键添加 MCP Server。
 - 📚 **RAG 页**：知识源勾选、检索文档卡片（表格/图片/公式富文本）、展开文件定位高亮、来源指南展示；笔记本 **emoji** 优先用列表返回的 `emoji`，无则请求 `POST /api/rag/emoji-from-title` 后通过 `PATCH /api/rag/notebooks/{id}/emoji` 保存；上传失败时解析 409/400 展示「重复上传」「不支持格式」等提示；解析中可打开「解析等待」弹窗（内含贪吃蛇小游戏）。
 
 ---

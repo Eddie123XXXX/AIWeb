@@ -751,7 +751,6 @@ export function App() {
         <AddMCPServerModal
           onClose={() => setMcpModalOpen(false)}
           onSuccess={(newToolNames) => {
-            setMcpModalOpen(false);
             refreshAgenticTools(newToolNames);
           }}
         />

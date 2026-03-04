@@ -101,13 +101,28 @@ export function parseMarkdownWithLatex(text) {
   return out;
 }
 
+/**
+ * 移除 LLM 可能输出的 "Final Answer" 标记（含 markdown 标题、加粗等），避免显示给用户。
+ */
+export function stripFinalAnswerMarkers(text) {
+  if (!text || typeof text !== 'string') return text;
+  return text
+    .replace(/^\s*#{1,6}\s*Final\s*Answer\s*$/gim, '') // ## Final Answer
+    .replace(/^\s*\*{1,2}\s*Final\s*Answer\s*\*{1,2}\s*$/gim, '') // **Final Answer**
+    .replace(/^\s*Final\s*Answer\s*[:：]\s*/gim, '') // Final Answer:
+    .replace(/^\s*Final\s*Answer\s*$/gim, '') // Final Answer 单独一行
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function parseMarkdown(text) {
   if (!text) return '';
+  const cleaned = stripFinalAnswerMarkers(text);
   try {
-    const raw = typeof marked.parse === 'function' ? marked.parse(text) : marked(text);
+    const raw = typeof marked.parse === 'function' ? marked.parse(cleaned) : marked(cleaned);
     return String(raw);
   } catch {
-    return text;
+    return cleaned;
   }
 }
 

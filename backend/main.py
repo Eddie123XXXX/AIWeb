@@ -87,6 +87,7 @@ app = FastAPI(
 - 🧠 长期记忆：打分写入、三维混合召回（语义+时间衰减+重要性）、反思与遗忘（见 memory 模块）
 - 📎 Quick Parse：MinIO 上传，解析为 Markdown 仅注入当轮上下文，不写入记忆/知识库
 - 📚 RAG 知识库：上传→解析→版面感知切块→Dense+Sparse 向量化→三段式检索；`/api/rag/search` 支持 document_ids 限定范围；文档总结（来源指南）入库，大文档截断后生成
+- 🧩 Agentic 模式：`/api/agentic/ws` WebSocket 流式（thought/action/observation 逐 token + 工具结果流式）、`/api/agentic/chat` HTTP 非流式；内置工具：`user_memory`（记忆检索）、`knowledge_search`（RAG 检索）、`web_search`、`data_analyzer`、`chart_generator`；支持 Skills、MCP、Worker 多 Agent
 
 ## 实现流程概览
 

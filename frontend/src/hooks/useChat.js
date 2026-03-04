@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { stripFinalAnswerMarkers } from '../utils/markdown';
 
 const DEFAULT_MODEL_ID = 'default';
 
@@ -75,19 +76,36 @@ export function useChat(conversationId = null, options = {}) {
       try {
         const data = JSON.parse(event.data);
 
-        // Agentic 模式：处理 Thought / Action / Observation / Final Answer 事件
+        // Agentic 模式：处理 stream_delta / Thought / Action / Observation / Final Answer 事件
         if (agenticEnabled && data.event) {
           if (data.event === 'error') {
             setMessages((prev) => [
               ...prev,
               { role: 'assistant', content: '错误：' + (data.message || '') },
             ]);
+            streamingBufferRef.current = '';
+            setStreamingContent('');
             setIsStreaming(false);
             setError(data.message || 'Agentic 会话错误');
             setAgenticStatus(null);
             return;
           }
+
+          // ---- token 级流式：逐 token 累积到 streamingContent，实时渲染 ----
+          if (data.event === 'stream_delta') {
+            const token = data.content || '';
+            if (token) {
+              streamingBufferRef.current += token;
+              const display = stripFinalAnswerMarkers(streamingBufferRef.current);
+              setStreamingContent(display);
+            }
+            return;
+          }
+
           if (data.event === 'thought') {
+            // 思考流结束——清空流式缓冲区（内容已逐 token 展示过），写入推理面板
+            streamingBufferRef.current = '';
+            setStreamingContent('');
             setAgenticStatus('thinking');
             setAgenticEvents((prev) => {
               const next = [
@@ -120,32 +138,48 @@ export function useChat(conversationId = null, options = {}) {
             });
             return;
           }
-          if (data.event === 'observation') {
+          if (data.event === 'observation_delta') {
+            const step = data.step ?? 0;
+            const chunk = data.content || '';
+            if (!chunk) return;
             setAgenticStatus('observation');
             setAgenticEvents((prev) => {
-              const next = [
-                ...prev,
-                {
-                  type: 'observation',
-                  step: data.step ?? 0,
-                  content: data.content || '',
-                },
-              ];
+              const last = prev[prev.length - 1];
+              const isAppending =
+                last?.type === 'observation' && last?.step === step;
+              const next = isAppending
+                ? [...prev.slice(0, -1), { ...last, content: last.content + chunk }]
+                : [...prev, { type: 'observation', step, content: chunk }];
+              agenticEventsRef.current = next;
+              return next;
+            });
+            return;
+          }
+          if (data.event === 'observation') {
+            setAgenticStatus('observation');
+            const step = data.step ?? 0;
+            const content = data.content || '';
+            setAgenticEvents((prev) => {
+              const last = prev[prev.length - 1];
+              const isUpdating =
+                last?.type === 'observation' && last?.step === step;
+              const next = isUpdating
+                ? [...prev.slice(0, -1), { ...last, content }]
+                : [...prev, { type: 'observation', step, content }];
               agenticEventsRef.current = next;
               return next;
             });
             return;
           }
           if (data.event === 'final_answer') {
-            // 去掉前缀 "Final Answer:"，只保留真正的回答内容
             const raw = data.content || '';
-            const content = raw.replace(/^Final Answer\s*:?\s*/i, '');
+            const content = stripFinalAnswerMarkers(raw);
             const convId = data.conversation_id;
 
-            // 前端模拟流式打字效果：逐字更新 streamingContent，结束后写入 messages
             if (!content) {
+              streamingBufferRef.current = '';
+              setStreamingContent('');
               setIsStreaming(false);
-              // 思路面板保留在本轮 user / assistant 之间，只把状态更新为 done
               setAgenticStatus('done');
               if (convId && onRoundCompleteRef.current) {
                 onRoundCompleteRef.current(convId);
@@ -153,57 +187,28 @@ export function useChat(conversationId = null, options = {}) {
               return;
             }
 
-            setAgenticStatus('done');
+            // 流式已将内容逐 token 推送完毕，直接落入 messages，跳过打字动画
             streamingBufferRef.current = '';
             setStreamingContent('');
-
-            const total = content.length;
-            const stepSize = 3; // 每次追加的字符数
-            const interval = 20; // 毫秒
-            let index = 0;
-
-            const tick = () => {
-              if (!isStreamingRef.current) {
-                // 已被用户中断
-                return;
-              }
-              index += stepSize;
-              if (index >= total) {
-                // 结束：把完整答案写入 messages，并清空 streamingContent
-                setStreamingContent('');
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    role: 'assistant',
-                    content,
-                    metadata: {
-                      agentic_trace: {
-                        version: 1,
-                        status: 'done',
-                        events: agenticEventsRef.current || [],
-                      },
-                    },
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: 'assistant',
+                content,
+                metadata: {
+                  agentic_trace: {
+                    version: 1,
+                    status: 'done',
+                    events: agenticEventsRef.current || [],
                   },
-                ]);
-                setIsStreaming(false);
-                // 先保留实时事件，避免“最终答案落地瞬间”面板闪消；
-                // Chat 侧会在检测到历史 trace 可用时自动切换为历史面板。
-                setAgenticStatus('done');
-                if (convId && onRoundCompleteRef.current) {
-                  onRoundCompleteRef.current(convId);
-                }
-                return;
-              }
-              const slice = content.slice(0, index);
-              streamingBufferRef.current = slice;
-              setStreamingContent(slice);
-              typingTimerRef.current = setTimeout(tick, interval);
-            };
-
-            // 确保处于“流式中”状态，然后启动动画
-            setIsStreaming(true);
-            isStreamingRef.current = true;
-            typingTimerRef.current = setTimeout(tick, interval);
+                },
+              },
+            ]);
+            setIsStreaming(false);
+            setAgenticStatus('done');
+            if (convId && onRoundCompleteRef.current) {
+              onRoundCompleteRef.current(convId);
+            }
             return;
           }
           // 未识别的 event，忽略
@@ -274,7 +279,7 @@ export function useChat(conversationId = null, options = {}) {
       const filesForThisRound = Array.isArray(quickParseFiles) ? quickParseFiles : null;
       lastQuickParseUsedRef.current = !!(filesForThisRound && filesForThisRound.length > 0);
 
-      // 1) 先在前端对话区追加“文件预览消息”（仅用于展示，不发给后端）
+      // 1) 先在前端对话区追加"文件预览消息"（仅用于展示，不发给后端）
       setMessages((prev) => {
         const next = [...prev];
         if (filesForThisRound && filesForThisRound.length > 0) {
