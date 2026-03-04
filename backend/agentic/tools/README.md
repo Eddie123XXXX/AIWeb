@@ -3,12 +3,12 @@
 ## 快速导航
 
 - 内置工具：`user_memory`、`knowledge_search`、`web_search`、`data_analyzer`、`chart_generator`
-- 扩展工具：SkillTool、MCPTool、WorkerTool
-- 注册入口：`tools_registry.register_builtins()`、`register_dynamic_from_settings()`
+- 扩展工具：SkillTool、MCPTool、RemoteMCPTool、WorkerTool
+- 注册入口：`tools_registry.register_builtins()`、`register_dynamic_from_settings()`、`mcp_manager.discover_and_register_mcp_tools()`
 - 相关文档：`backend/agentic/README.md`
 
 本目录包含 Agentic 模式下的所有工具实现，供 LLM 在 ReAct 循环中调用。  
-一工具一文件，内置工具在应用启动时自动注册，扩展工具由配置或 SKILLS 目录动态加载。📦
+一工具一文件，内置工具在应用启动时自动注册，扩展工具由配置、SKILLS 目录或 MCP Server 动态加载。📦
 
 ## ✨ 内置工具
 
@@ -43,11 +43,28 @@
 
 ## 🔌 扩展工具
 
-以下为框架类工具，用于动态注册外部能力。
+以下为框架类工具，用于动态注册外部能力或封装子 Agent。
 
-- **SkillTool**（`skill_tool.py`）：将系统技能封装为 Tool；可通过 `AgenticSettings.skills` 静态注册，或通过 `SKILLS/*.md` + `*.py` 动态加载；无执行逻辑时返回「尚未实现」提示
-- **MCPTool**（`mcp_tool.py`）：通过 `MCPClient` 调用远端 MCP Server 上暴露的工具；由配置或 MCP Server 发现时动态注册；权限：`mcp:invoke`
-- **WorkerTool**（`worker_tool.py`）：将专业领域子 Agent 封装为标准 Tool，用于 Supervisor-Worker 多 Agent 架构；参数：`query`（必填）、`context`（可选）
+- **SkillTool**（`skill_tool.py`）
+  - 将系统技能封装为 Tool
+  - 注册方式：
+    - 通过 `AgenticSettings.skills` 静态注册（仅 name/description）
+    - 或通过 `SKILLS/*.md` + `*.py` 动态加载（Markdown frontmatter + `execute()` 函数）
+  - 无执行逻辑时返回「尚未实现」提示，便于渐进式接入
+
+- **MCPTool**（`mcp_tool.py`）
+  - 通过 `MCPClient` 调用远端 MCP Server 上配置好的单个工具
+  - 由 `AgenticSettings.mcp_tools` 中的静态映射注册（name/server_name/tool_name）
+  - 权限：`mcp:invoke`
+
+- **RemoteMCPTool**（定义在 `mcp_manager.py` 中）
+  - 在 FastAPI 启动阶段通过 `discover_and_register_mcp_tools()` **自动发现** MCP Server 上的全部工具
+  - 按 Server 配置的 `tool_prefix` + 远端工具名生成本地工具名，并注册到 `ToolRegistry`
+  - 对 LLM 来说与普通 Tool 无差别，只需正常按工具名调用即可
+
+- **WorkerTool**（`worker_tool.py`）
+  - 将专业领域子 Agent 封装为标准 Tool，用于 Supervisor-Worker 多 Agent 架构
+  - 参数：`query`（必填）、`context`（可选），返回子 Agent 的回答文本
 
 ---
 
@@ -58,4 +75,11 @@
 | `common.py` | `validate_params` 参数校验、`ensure_permissions` 权限检查（当前统一放行） |
 | `tools_base.py` | 位于 `agentic/` 根目录，定义 `Tool`、`ToolContext`、`ToolExecutionError` 基类 |
 
-**注册流程**：① `register_builtins()` 注册内置工具 → ② `register_dynamic_from_settings()` 根据配置注册 SkillTool、MCPTool → ③ `load_markdown_skills()` 扫描 `SKILLS/` 按 `*.md` 定义注册 SkillTool。详见 `agentic/tools_registry.py`。
+**注册流程（整体）**：
+
+1. `register_builtins()`：注册内置工具（user_memory / knowledge_search / web_search / data_analyzer / chart_generator）  
+2. `register_dynamic_from_settings()`：根据 `AgenticSettings.skills` 与 `AgenticSettings.mcp_tools` 注册 SkillTool 与 MCPTool  
+3. `load_markdown_skills()`：扫描 `SKILLS/` 目录下的 `*.md` + `*.py`，按 Markdown frontmatter 与 `execute()` 函数注册 SkillTool  
+4. `discover_and_register_mcp_tools()`：并发向所有启用的 MCP Server 调用 `list_tools`，将每个远端工具包装为 RemoteMCPTool 并注册到 `ToolRegistry`（不覆盖已有同名工具）  
+
+详见 `agentic/tools_registry.py` 与 `agentic/mcp_manager.py`。

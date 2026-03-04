@@ -10,6 +10,9 @@
   - `backend/rag/README.md`
   - `backend/memory/README.md`
   - `backend/agentic/README.md`
+  - `backend/db/README.md`
+  - `backend/infra/README.md`
+  - `infra/README.md`
 
 一个面向个人与小团队的全栈 AI 工作台。  
 前端基于 React + Vite，后端基于 FastAPI，整合「聊天 / 记忆 / 知识库 / 文件解析」等能力，帮你在本地或私有环境里搭建**自己的 AI 助手控制台**。😎
@@ -46,9 +49,9 @@
   - **上传反馈**：同笔记本重复上传返回 409；不支持的文件类型返回 400，前端展示「重复上传」「不支持格式」等提示；解析中可打开「解析等待」弹窗玩贪吃蛇
 
 - 🧩 **Agentic 模式 & 工具调用（`backend/agentic`）**
-  - ReAct 工作流：token 级流式（`stream_delta`、`observation_delta`）+ Thought / Action / Observation / Final Answer
-  - 内置工具：`user_memory`、`knowledge_search`、`web_search`、`data_analyzer`、`chart_generator`；Skills 系统（`backend/agentic/SKILLS`）；MCP Server（通过 `/api/agentic/mcp-servers` 管理）
-  - 前端在聊天页提供 Agentic 开关与推理面板，按会话记住开关状态，可勾选启用的工具列表并一键添加 MCP Server；支持 ECharts 图表渲染
+  - ReAct 状态机：token 级流式（`stream_delta`、`observation_delta`）+ Thought / Action / Observation / Final Answer，全程通过 `/api/agentic/ws` 推送事件，并将完整 trace 持久化到会话消息中
+  - 工具系统：内置工具（`user_memory`、`knowledge_search`、`web_search`、`data_analyzer`、`chart_generator`）、Skills 系统（`backend/agentic/SKILLS`）、MCP 集成（支持静态 MCPTool 与通过 `mcp_manager.discover_and_register_mcp_tools` 动态发现的 RemoteMCPTool）
+  - 多 Agent：支持 Supervisor-Worker 路由（`WorkerTool`），由 Supervisor 决定调用哪组 Worker 工具；前端在聊天页提供 Agentic 开关与推理面板，基于事件流回放推理过程，并对 `chart_generator` 输出进行 ECharts 图表渲染
 
 - 🧱 **基础运维与基础设施集成**
   - `infra/docker-compose.yml` 一键拉起 PostgreSQL / Redis / MinIO / Milvus / RabbitMQ / Elasticsearch 等依赖服务
