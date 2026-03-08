@@ -85,11 +85,18 @@ export function AgenticReasoningPanel({ events = [], status, isStreaming, expand
                 : e.type === 'action'
                 ? `${t('agenticLabelAction')}${e.tool ? `: ${t('agenticActionCallingTool')} "${e.tool}"` : ''}`
                 : t('agenticLabelObservation');
+            if (e.type === 'action') {
+              return (
+                <div key={key} className="agentic-panel__event agentic-panel__event--action">
+                  <span className="agentic-panel__event-summary">{label}</span>
+                </div>
+              );
+            }
             return (
               <details key={key} className="agentic-panel__event" open={e.type === 'thought'}>
                 <summary className="agentic-panel__event-summary">{label}</summary>
                 <div className="agentic-panel__event-content">
-                  {stripStepPrefix(e.content) || (e.type === 'action' ? t('agenticCallingTool') : '')}
+                  {stripStepPrefix(e.content)}
                 </div>
               </details>
             );

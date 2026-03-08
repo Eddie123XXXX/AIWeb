@@ -127,9 +127,39 @@ def _init_provider_models_from_env() -> None:
         model_configs[default_id] = config
 
 
+def _init_deepresearch_model() -> None:
+    """
+    为深度研究 (deepresearch) 固定注册 deepseek-v3.2 配置。
+    使用 DeepSeek API 的 deepseek-chat（对应 V3.2），需配置 DEEPSEEK_API_KEY。
+    """
+    if "deepseek-v3.2" in model_configs:
+        return
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        return
+    provider_conf = PROVIDER_CONFIGS.get("deepseek") or {}
+    api_base = provider_conf.get("api_base") or "https://api.deepseek.com/v1"
+    model_name = "deepseek-chat"  # DeepSeek V3.2 对应 API 模型名
+    max_tokens = (provider_conf.get("model_max_tokens") or {}).get(
+        model_name, provider_conf.get("max_tokens", 8192)
+    )
+    config = ModelConfig(
+        id="deepseek-v3.2",
+        name="DeepSeek V3.2 (深度研究专用)",
+        provider="deepseek",
+        model_name=model_name,
+        api_key=api_key,
+        api_base=api_base,
+        max_tokens=max_tokens,
+        temperature=0.7,
+    )
+    model_configs["deepseek-v3.2"] = config
+
+
 # 模块导入时尝试从环境变量中预加载默认模型和各 provider 的默认配置
 _init_default_model_from_env()
 _init_provider_models_from_env()
+_init_deepresearch_model()
 
 
 def mask_api_key(api_key: str) -> str:

@@ -98,3 +98,61 @@ class KnowledgeSearchTool:
 
         header = f"从当前用户的所有知识库中检索到 {len(all_hits)} 条候选结果，前 {top_k} 条摘要如下："
         return header + "\n" + "\n".join(lines)
+
+
+async def knowledge_search_structured(
+    query: str,
+    user_id: int | None = None,
+    top_k: int = 5,
+) -> list[dict[str, Any]]:
+    """
+    供 DeepResearch 等模块调用的结构化知识库检索，返回统一格式列表。
+    仅支持按 user_id 检索该用户下全部笔记本内容；未传 user_id 返回空列表。
+    """
+    from rag.models import SearchRequest
+    from rag.service import search as rag_search
+
+    if user_id is None:
+        return []
+
+    notebooks: list[dict[str, Any]] = []
+    page_size = 100
+    offset = 0
+    while True:
+        page = await notebook_repository.list_by_user(int(user_id), limit=page_size, offset=offset)
+        if not page:
+            break
+        notebooks.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
+    nb_ids = [str(nb.get("id")) for nb in notebooks if nb.get("id")]
+    if not nb_ids:
+        return []
+
+    all_hits: list[dict[str, Any]] = []
+    for nid in nb_ids:
+        try:
+            request = SearchRequest(notebook_id=nid, query=query, top_k=top_k)
+            result = await rag_search(request)
+        except Exception:
+            continue
+        for hit in list(result.hits or []):
+            content = (getattr(hit, "parent_content", None) or getattr(hit, "content", None) or "").strip()
+            doc_id = getattr(hit, "document_id", "unknown")
+            all_hits.append({
+                "url": f"local://{nid}/{doc_id}",
+                "name": doc_id[:32] + ("..." if len(doc_id) > 32 else ""),
+                "summary": content[:2000] if content else "",
+                "snippet": (content[:300] if content else ""),
+                "siteName": f"知识库: {nid}",
+                "siteIcon": "",
+                "source": "local",
+            })
+
+    def _score(item: dict) -> float:
+        # 简单按 length 保留更多内容的结果在前
+        return len(item.get("summary") or "")
+
+    all_hits.sort(key=_score, reverse=True)
+    return all_hits[: top_k * 2]

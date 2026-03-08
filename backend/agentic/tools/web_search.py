@@ -209,3 +209,53 @@ class WebSearchTool:
             idx += 1
         return f"联网搜索结果（provider={provider}，query={query}）：\n" + "\n\n".join(lines)
 
+
+def _item_to_research_format(it: Dict[str, Any], source: str = "web") -> Dict[str, Any]:
+    """将工具内部单条结果转为 DeepResearch 流水线所需结构。"""
+    typ = (it.get("type") or "").strip()
+    url = str(it.get("link") or it.get("url") or "").strip()
+    title = str(it.get("title") or it.get("name") or "N/A").strip()
+    snippet = str(it.get("snippet") or it.get("description") or it.get("summary") or "").strip()
+    return {
+        "url": url,
+        "name": title,
+        "summary": snippet,
+        "snippet": snippet[:300] if snippet else "",
+        "siteName": "N/A",
+        "siteIcon": "N/A",
+        "source": source,
+    }
+
+
+async def web_search_structured(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    """
+    供 DeepResearch 等模块调用的结构化联网搜索，返回统一格式列表。
+    优先 Serper，否则 Bocha；未配置时返回空列表。
+    """
+    has_serper = bool((os.getenv("SERPER_API_KEY") or "").strip())
+    has_bocha = bool((os.getenv("BOCHA_API_KEY") or "").strip())
+    if not has_serper and not has_bocha:
+        return []
+    tool = WebSearchTool()
+    parsed = WebSearchParams(query=query.strip(), top_k=top_k)
+    try:
+        if has_serper:
+            raw = await tool._search_with_serper(parsed)
+        else:
+            raw = await tool._search_with_bocha(parsed)
+    except Exception:
+        return []
+    result: List[Dict[str, Any]] = []
+    for it in raw:
+        if not isinstance(it, dict):
+            continue
+        typ = (it.get("type") or "").strip()
+        if typ not in ("organic", "knowledgeGraph", "peopleAlsoAsk"):
+            continue
+        link = it.get("link") or it.get("url") or ""
+        snippet = it.get("snippet") or it.get("description") or ""
+        if not link and not snippet:
+            continue
+        result.append(_item_to_research_format(it, source="web"))
+    return result
+

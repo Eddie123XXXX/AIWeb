@@ -61,12 +61,15 @@ async def main() -> None:
     print(f"连接: {host}:{port}/{database} (用户: {user})")
     dsn = get_dsn()
     schema_dir = os.path.dirname(os.path.abspath(__file__))
+    # 新库初始化只依赖主 schema 文件。
+    # 旧版补列脚本（如 research_sessions 的 sources/ui_state）已收敛回主 schema，不再单独执行。
     files = [
         os.path.join(schema_dir, "schema_users.sql"),
         os.path.join(schema_dir, "schema_user_profiles.sql"),
         os.path.join(schema_dir, "schema_user_oauths.sql"),
         os.path.join(schema_dir, "schema_conversations.sql"),
         os.path.join(schema_dir, "schema_messages.sql"),
+        os.path.join(schema_dir, "schema_research_sessions.sql"),
         os.path.join(schema_dir, "schema_agent_memories.sql"),
         os.path.join(schema_dir, "schema_notebooks.sql"),
         os.path.join(schema_dir, "schema_documents.sql"),

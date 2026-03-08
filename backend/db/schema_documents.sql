@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS documents (
     status          VARCHAR(20)     NOT NULL DEFAULT 'UPLOADED',
     error_log       TEXT            DEFAULT NULL,
     metadata        JSONB           DEFAULT NULL,
+    summary         TEXT            DEFAULT NULL,
 
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -65,3 +66,4 @@ COMMENT ON COLUMN documents.chunking_strategy IS '切块策略';
 COMMENT ON COLUMN documents.status IS '严格状态机: UPLOADED → PARSING → PARSED → EMBEDDING → READY / FAILED';
 COMMENT ON COLUMN documents.error_log IS '失败时的详细堆栈信息';
 COMMENT ON COLUMN documents.metadata IS '文档级元数据扩展 (作者、出处、语言等)';
+COMMENT ON COLUMN documents.summary IS '文档总结 / 来源指南，在首次展开文档时按需生成并回写';

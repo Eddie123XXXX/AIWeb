@@ -44,10 +44,11 @@ export function InputArea({
   const [enteringFixed, setEnteringFixed] = useState(false);
   const [expandedToolGroups, setExpandedToolGroups] = useState({});
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const text = (value + (interimTranscript || '')).trim();
     if (!text) return;
-    onSend(text);
+    const result = await Promise.resolve(onSend(text));
+    if (result === false) return;
     setValue('');
     setInterimTranscript('');
   }, [value, interimTranscript, onSend]);
@@ -55,7 +56,7 @@ export function InputArea({
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      void handleSubmit();
     }
   };
 
@@ -63,7 +64,7 @@ export function InputArea({
     if (isStreaming) {
       onCancelStream();
     } else {
-      handleSubmit();
+      void handleSubmit();
     }
   };
 

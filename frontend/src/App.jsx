@@ -12,6 +12,7 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { RAGDashboard } from './pages/RAGDashboard';
 import { RAGSearch } from './pages/RAGSearch';
+import { DeepResearch } from './pages/DeepResearch';
 import { Profile } from './pages/Profile';
 import { MemoryManageModal } from './components/MemoryManageModal';
 import { AddMCPServerModal } from './components/AddMCPServerModal';
@@ -21,6 +22,7 @@ import { useTranslation } from './context/LocaleContext';
 
 const ATTACHMENTS_STORAGE_KEY = 'chat-file-attachments';
 const AGENTIC_MODE_STORAGE_KEY = 'chat-agentic-mode-map';
+const LAST_CONVERSATION_STORAGE_KEY = 'chat-last-conversation-id';
 
 function loadAttachmentsMap() {
   if (typeof window === 'undefined') return {};
@@ -75,6 +77,29 @@ function loadAgenticModeMap() {
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
+  }
+}
+
+function getLastConversationId() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const v = window.localStorage.getItem(LAST_CONVERSATION_STORAGE_KEY);
+    return v && v !== '__none__' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function setLastConversationId(conversationId) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!conversationId) {
+      window.localStorage.setItem(LAST_CONVERSATION_STORAGE_KEY, '__none__');
+    } else {
+      window.localStorage.setItem(LAST_CONVERSATION_STORAGE_KEY, conversationId);
+    }
+  } catch {
+    // ignore
   }
 }
 
@@ -265,6 +290,7 @@ export function App() {
     (completedConversationId) => {
       if (completedConversationId) {
         setConversationId(completedConversationId);
+        setLastConversationId(completedConversationId);
         // 本轮结束后记录该会话的 agentic 开关状态，供历史会话恢复
         setConversationAgenticMode(completedConversationId, agenticEnabled);
       }
@@ -283,6 +309,10 @@ export function App() {
     cancelStream,
     agenticEvents,
     agenticStatus,
+    restoreAgenticLiveTrace,
+    restoreChatStream,
+    updateChatStreamContent,
+    completeChatStream,
   } = useChat(conversationId, {
     onRoundComplete: handleRoundComplete,
     agenticEnabled,
@@ -321,6 +351,7 @@ export function App() {
       const conv = await createConversation('新对话', modelId);
       if (!conv) return;
       setConversationId(conv.id);
+      setLastConversationId(conv.id);
       setMessages([]);
       setConversations((prev) => [{ ...conv, title: conv.title || '新对话' }, ...prev]);
     } catch {
@@ -339,6 +370,7 @@ export function App() {
         if (!resp.ok) return;
         const detail = await resp.json();
         setConversationId(detail.id);
+        setLastConversationId(detail.id);
         // 切换历史会话时，恢复该会话上次的 agentic 开关状态；无记录时保持当前状态
         const savedAgentic = getConversationAgenticMode(detail.id);
         if (savedAgentic !== null) {
@@ -355,39 +387,136 @@ export function App() {
           return (a.textIndex || 0) - (b.textIndex || 0);
         });
 
-        if (!attachments.length) {
-          setMessages(baseMessages);
-          return;
-        }
-
-        const enhanced = [];
-        let textIndex = 0;
-        let attIdx = 0;
-
-        for (const msg of baseMessages) {
-          while (attIdx < attachments.length && textIndex === (attachments[attIdx].textIndex || 0)) {
-            const att = attachments[attIdx];
-            if (att.files && att.files.length) {
-              enhanced.push({
-                role: 'user',
-                content: '',
-                files: att.files,
-                isFiles: true,
-              });
+        let msgsToSet = baseMessages;
+        if (attachments.length) {
+          const enhanced = [];
+          let textIndex = 0;
+          let attIdx = 0;
+          for (const msg of baseMessages) {
+            while (attIdx < attachments.length && textIndex === (attachments[attIdx].textIndex || 0)) {
+              const att = attachments[attIdx];
+              if (att.files && att.files.length) {
+                enhanced.push({
+                  role: 'user',
+                  content: '',
+                  files: att.files,
+                  isFiles: true,
+                });
+              }
+              attIdx += 1;
             }
-            attIdx += 1;
+            enhanced.push(msg);
+            textIndex += 1;
           }
-          enhanced.push(msg);
-          textIndex += 1;
+          msgsToSet = enhanced;
+        }
+        setMessages(msgsToSet);
+        // 尝试从后端恢复该会话当前进行中的 Agentic 推理 trace（如有）
+        let restoredAgentic = false;
+        try {
+          const traceResp = await fetch(
+            apiUrl(`/api/agentic/trace?conversation_id=${encodeURIComponent(detail.id)}`),
+            { headers: getAuthHeaders() }
+          );
+          if (traceResp.ok) {
+            const traceData = await traceResp.json();
+            const trace = traceData?.trace;
+            if (trace && trace.status !== 'done') {
+              restoredAgentic = true;
+              setAgenticEnabled(true);
+              setConversationAgenticMode(detail.id, true);
+              if ((!detail.messages || detail.messages.length === 0) && trace.user_query) {
+                setMessages([
+                  { role: 'user', content: trace.user_query, metadata: null },
+                ]);
+              }
+              if (typeof restoreAgenticLiveTrace === 'function') {
+                restoreAgenticLiveTrace(trace, { fromRestore: true });
+              }
+            }
+          }
+        } catch {
+          // 忽略 trace 恢复错误
         }
 
-        setMessages(enhanced);
+        // 若非 Agentic，尝试恢复普通 Chat 流式状态（如有）
+        if (!restoredAgentic && typeof restoreChatStream === 'function') {
+          try {
+            const streamResp = await fetch(
+              apiUrl(`/api/chat/stream?conversation_id=${encodeURIComponent(detail.id)}`),
+              { headers: getAuthHeaders() }
+            );
+            if (streamResp.ok) {
+              const streamData = await streamResp.json();
+              const stream = streamData?.stream;
+              if (stream && stream.status === 'streaming') {
+                restoreChatStream(stream, msgsToSet);
+                const pollInterval = setInterval(async () => {
+                  try {
+                    const r = await fetch(
+                      apiUrl(`/api/chat/stream?conversation_id=${encodeURIComponent(detail.id)}`),
+                      { headers: getAuthHeaders() }
+                    );
+                    if (!r.ok) return;
+                    const d = await r.json();
+                    const s = d?.stream;
+                    if (s && s.status === 'streaming' && typeof updateChatStreamContent === 'function') {
+                      updateChatStreamContent(s.assistant_content || '');
+                    } else if (!s) {
+                      clearInterval(pollInterval);
+                      const refetch = await fetch(apiUrl(`/api/history/conversations/${detail.id}`), {
+                        headers: getAuthHeaders(),
+                      });
+                      if (refetch.ok) {
+                        const refDetail = await refetch.json();
+                        const refBase = (refDetail.messages || []).map((m) => ({
+                          role: m.role || 'user',
+                          content: normalizeAssistantHistoryContent(m.role || 'user', m.content || ''),
+                          metadata: m.metadata || null,
+                        }));
+                        const refAttachments = getConversationAttachments(detail.id).slice().sort(
+                          (a, b) => (a.textIndex || 0) - (b.textIndex || 0)
+                        );
+                        let refMsgs = refBase;
+                        if (refAttachments.length) {
+                          const refEnhanced = [];
+                          let ti = 0;
+                          let ai = 0;
+                          for (const msg of refBase) {
+                            while (ai < refAttachments.length && ti === (refAttachments[ai].textIndex || 0)) {
+                              const att = refAttachments[ai];
+                              if (att.files?.length) {
+                                refEnhanced.push({ role: 'user', content: '', files: att.files, isFiles: true });
+                              }
+                              ai += 1;
+                            }
+                            refEnhanced.push(msg);
+                            ti += 1;
+                          }
+                          refMsgs = refEnhanced;
+                        }
+                        if (typeof completeChatStream === 'function') {
+                          completeChatStream(refMsgs);
+                        }
+                      }
+                    }
+                  } catch {
+                    clearInterval(pollInterval);
+                  }
+                }, 1500);
+                setTimeout(() => clearInterval(pollInterval), 300000);
+              }
+            }
+          } catch {
+            // 忽略
+          }
+        }
       } catch {
         setConversationId(id);
         setMessages([]);
       }
     },
-    [setMessages]
+    [setMessages, agenticEnabled, restoreAgenticLiveTrace, restoreChatStream, updateChatStreamContent, completeChatStream]
   );
 
   const handleRenameConversation = useCallback(async (id, newTitle) => {
@@ -418,6 +547,7 @@ export function App() {
         removeConversationAgenticMode(id);
         if (conversationId === id) {
           setConversationId(null);
+          setLastConversationId(null);
           setMessages([]);
         }
       } catch {
@@ -440,6 +570,7 @@ export function App() {
         if (conv) {
           cid = conv.id;
           setConversationId(cid);
+          setLastConversationId(cid);
           setConversations((prev) => [{ ...conv, title: conv.title || '新对话' }, ...prev]);
         }
         if (hasFiles && cid) {
@@ -604,6 +735,187 @@ export function App() {
 
   const hasChat = messages.length > 0 || !!streamingContent;
 
+  // 应用初始化后，若当前没有选中会话，则尝试基于上次使用的会话 ID 自动恢复：
+  // 1) 加载该会话的历史消息；
+  // 2) 尝试从 /api/agentic/trace 恢复进行中的 Agentic 推理状态。
+  useEffect(() => {
+    if (!token) return;
+    if (conversationId) return;
+    const lastId = getLastConversationId();
+    if (!lastId) return;
+
+    const restore = async () => {
+      try {
+        const resp = await fetch(apiUrl(`/api/history/conversations/${lastId}`), {
+          headers: getAuthHeaders(),
+        });
+        if (!resp.ok) {
+          if (resp.status === 403 || resp.status === 404) {
+            setLastConversationId(null);
+          }
+          return;
+        }
+        const detail = await resp.json();
+        setConversationId(detail.id);
+        setLastConversationId(detail.id);
+
+        const savedAgentic = getConversationAgenticMode(detail.id);
+        if (savedAgentic !== null) {
+          setAgenticEnabled(savedAgentic);
+        }
+
+        const baseMessages = (detail.messages || []).map((m) => ({
+          role: m.role || 'user',
+          content: normalizeAssistantHistoryContent(m.role || 'user', m.content || ''),
+          metadata: m.metadata || null,
+        }));
+
+        const attachments = getConversationAttachments(detail.id).slice().sort((a, b) => {
+          return (a.textIndex || 0) - (b.textIndex || 0);
+        });
+
+        let msgsToSet = baseMessages;
+        if (attachments.length) {
+          const enhanced = [];
+          let textIndex = 0;
+          let attIdx = 0;
+          for (const msg of baseMessages) {
+            while (attIdx < attachments.length && textIndex === (attachments[attIdx].textIndex || 0)) {
+              const att = attachments[attIdx];
+              if (att.files && att.files.length) {
+                enhanced.push({
+                  role: 'user',
+                  content: '',
+                  files: att.files,
+                  isFiles: true,
+                });
+              }
+              attIdx += 1;
+            }
+            enhanced.push(msg);
+            textIndex += 1;
+          }
+          msgsToSet = enhanced;
+        }
+        setMessages(msgsToSet);
+
+        // 尝试从后端恢复该会话当前进行中的 Agentic 推理 trace（如有）
+        let restoredAgentic = false;
+        try {
+          const traceResp = await fetch(
+            apiUrl(`/api/agentic/trace?conversation_id=${encodeURIComponent(detail.id)}`),
+            { headers: getAuthHeaders() }
+          );
+          if (traceResp.ok) {
+            const traceData = await traceResp.json();
+            const trace = traceData?.trace;
+            if (trace && trace.status !== 'done') {
+              restoredAgentic = true;
+              setAgenticEnabled(true);
+              setConversationAgenticMode(detail.id, true);
+              if ((!detail.messages || detail.messages.length === 0) && trace.user_query) {
+                setMessages([
+                  { role: 'user', content: trace.user_query, metadata: null },
+                ]);
+              }
+              if (typeof restoreAgenticLiveTrace === 'function') {
+                restoreAgenticLiveTrace(trace, { fromRestore: true });
+              }
+            }
+          }
+        } catch {
+          // 忽略 trace 恢复错误
+        }
+
+        // 若非 Agentic，尝试恢复普通 Chat 流式状态（如有）
+        if (!restoredAgentic && typeof restoreChatStream === 'function') {
+          try {
+            const streamResp = await fetch(
+              apiUrl(`/api/chat/stream?conversation_id=${encodeURIComponent(detail.id)}`),
+              { headers: getAuthHeaders() }
+            );
+            if (streamResp.ok) {
+              const streamData = await streamResp.json();
+              const stream = streamData?.stream;
+              if (stream && stream.status === 'streaming') {
+                restoreChatStream(stream, msgsToSet);
+                const pollInterval = setInterval(async () => {
+                  try {
+                    const r = await fetch(
+                      apiUrl(`/api/chat/stream?conversation_id=${encodeURIComponent(detail.id)}`),
+                      { headers: getAuthHeaders() }
+                    );
+                    if (!r.ok) return;
+                    const d = await r.json();
+                    const s = d?.stream;
+                    if (s && s.status === 'streaming' && typeof updateChatStreamContent === 'function') {
+                      updateChatStreamContent(s.assistant_content || '');
+                    } else if (!s) {
+                      clearInterval(pollInterval);
+                      const refetch = await fetch(apiUrl(`/api/history/conversations/${detail.id}`), {
+                        headers: getAuthHeaders(),
+                      });
+                      if (refetch.ok) {
+                        const refDetail = await refetch.json();
+                        const refBase = (refDetail.messages || []).map((m) => ({
+                          role: m.role || 'user',
+                          content: normalizeAssistantHistoryContent(m.role || 'user', m.content || ''),
+                          metadata: m.metadata || null,
+                        }));
+                        const refAttachments = getConversationAttachments(detail.id).slice().sort(
+                          (a, b) => (a.textIndex || 0) - (b.textIndex || 0)
+                        );
+                        let refMsgs = refBase;
+                        if (refAttachments.length) {
+                          const refEnhanced = [];
+                          let ti = 0;
+                          let ai = 0;
+                          for (const msg of refBase) {
+                            while (ai < refAttachments.length && ti === (refAttachments[ai].textIndex || 0)) {
+                              const att = refAttachments[ai];
+                              if (att.files?.length) {
+                                refEnhanced.push({ role: 'user', content: '', files: att.files, isFiles: true });
+                              }
+                              ai += 1;
+                            }
+                            refEnhanced.push(msg);
+                            ti += 1;
+                          }
+                          refMsgs = refEnhanced;
+                        }
+                        if (typeof completeChatStream === 'function') {
+                          completeChatStream(refMsgs);
+                        }
+                      }
+                    }
+                  } catch {
+                    clearInterval(pollInterval);
+                  }
+                }, 1500);
+                setTimeout(() => clearInterval(pollInterval), 300000);
+              }
+            }
+          } catch {
+            // 忽略 chat stream 恢复错误
+          }
+        }
+      } catch {
+        // 忽略恢复错误，保持在 Welcome 状态
+      }
+    };
+
+    restore();
+  }, [
+    token,
+    conversationId,
+    setMessages,
+    agenticEnabled,
+    restoreAgenticLiveTrace,
+    restoreChatStream,
+    updateChatStreamContent,
+    completeChatStream,
+  ]);
+
   const handleToggleAgentic = useCallback(() => {
     setAgenticEnabled((prev) => {
       const next = !prev;
@@ -720,6 +1032,20 @@ export function App() {
                 currentModel={currentModel}
                 defaultModelId={defaultModelId}
                 onModelChange={handleModelChange}
+                onLogout={() => setToken(null)}
+                onOpenProfile={() => setProfileModalOpen(true)}
+                onOpenMemoryManage={() => setMemoryModalOpen(true)}
+              />
+            )
+          }
+        />
+        <Route
+          path="/deep-research"
+          element={
+            !token ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <DeepResearch
                 onLogout={() => setToken(null)}
                 onOpenProfile={() => setProfileModalOpen(true)}
                 onOpenMemoryManage={() => setMemoryModalOpen(true)}

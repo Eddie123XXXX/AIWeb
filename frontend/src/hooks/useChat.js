@@ -384,5 +384,60 @@ export function useChat(conversationId = null, options = {}) {
     cancelStream,
     agenticEvents,
     agenticStatus,
+    /**
+     * 从后端 /api/agentic/trace 恢复一轮进行中的 Agentic 推理状态，
+     * 用于页面刷新或切换会话后重建实时推理面板。
+     * @param {object} trace - { version, status, events, user_query? }
+     * @param {object} opts - { fromRestore?: boolean } 为 true 时跳过 agenticEnabled 检查（刷新恢复场景）
+     */
+    restoreAgenticLiveTrace: useCallback(
+      (trace, opts = {}) => {
+        if (!trace) return;
+        if (!opts.fromRestore && !agenticEnabled) return;
+        const events = Array.isArray(trace.events) ? trace.events : [];
+        const status = trace.status || 'thinking';
+        streamingBufferRef.current = '';
+        setStreamingContent('');
+        setError(null);
+        setAgenticEvents(events);
+        agenticEventsRef.current = events;
+        setAgenticStatus(status);
+        setIsStreaming(true);
+      },
+      [agenticEnabled]
+    ),
+    /**
+     * 从后端 /api/chat/stream 恢复普通 Chat 流式输出状态（刷新后恢复用）。
+     * @param {object} stream - { user_content, assistant_content, status }
+     * @param {array} baseMessages - 已有历史消息
+     */
+    restoreChatStream: useCallback((stream, baseMessages = []) => {
+      if (!stream || stream.status !== 'streaming') return;
+      const userContent = stream.user_content || '';
+      const assistantContent = stream.assistant_content || '';
+      const msgs = Array.isArray(baseMessages) ? [...baseMessages] : [];
+      if (userContent) {
+        msgs.push({ role: 'user', content: userContent });
+      }
+      setMessages(msgs);
+      streamingBufferRef.current = assistantContent;
+      setStreamingContent(assistantContent);
+      setError(null);
+      setIsStreaming(true);
+    }, []),
+    /** 轮询时更新流式内容 */
+    updateChatStreamContent: useCallback((content) => {
+      streamingBufferRef.current = content || '';
+      setStreamingContent(content || '');
+    }, []),
+    /** 流式结束后，用完整消息列表收尾 */
+    completeChatStream: useCallback((messages) => {
+      streamingBufferRef.current = '';
+      setStreamingContent('');
+      setIsStreaming(false);
+      if (Array.isArray(messages) && messages.length > 0) {
+        setMessages(messages);
+      }
+    }, []),
   };
 }

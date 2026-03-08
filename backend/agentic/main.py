@@ -15,12 +15,19 @@ from uuid import uuid4
 
 from db.conversation_repository import conversation_repository
 from routers.models import get_model_config_by_id
-from services.chat_context import get_context, get_memory_context_for_prompt, persist_round
+from services.chat_context import (
+    get_context,
+    get_memory_context_for_prompt,
+    persist_round,
+    set_agentic_trace,
+    get_agentic_trace,
+)
 
 from .agent_loop import run_agentic_session
 from .config import get_settings
 from .mcp_manager import discover_and_register_mcp_tools, get_registered_mcp_tools
 from .tools_registry import registry
+from .deepresearch import router as deepresearch_router
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +217,18 @@ async def list_mcp_servers() -> Dict[str, Any]:
     return {"servers": servers, "total_mcp_tools": len(mcp_tools)}
 
 
+@router.get("/trace")
+async def get_live_agentic_trace(conversation_id: str) -> Dict[str, Any]:
+    """
+    查询某个会话当前进行中的 Agentic 推理 trace（实时状态）。
+
+    - 若当前没有进行中的 Agentic 轮次，trace 为 null；
+    - 若有，则返回 {version, status, events}。
+    """
+    trace = await get_agentic_trace(conversation_id)
+    return {"conversation_id": conversation_id, "trace": trace}
+
+
 @router.post("/mcp-servers/refresh")
 async def refresh_mcp_tools() -> Dict[str, Any]:
     """
@@ -357,10 +376,46 @@ async def agentic_ws(websocket: WebSocket) -> None:
             system_prompt = base_system_prompt
     history_messages = await _get_agentic_history_messages(conv_id)
 
+    client_disconnected: bool = False
+
     async def send_json(payload: Dict[str, Any]) -> None:
-        await websocket.send_json(payload)
+        nonlocal client_disconnected
+        if client_disconnected:
+            return
+        try:
+            await websocket.send_json(payload)
+        except WebSocketDisconnect:
+            # 前端断开连接时，不再中断 Agentic 推理，仅停止后续推送
+            client_disconnected = True
+        except Exception:
+            # 其他发送异常同样视为客户端不可用，避免打断后台任务
+            client_disconnected = True
 
     trace_events: list[dict[str, Any]] = []
+
+    # 会话开始即写入 trace（events 为空），便于用户刚发起就刷新时也能恢复
+    async def _persist_live_trace(status: Optional[str] = None) -> None:
+        """
+        将当前轮 Agentic 推理的中间状态实时写入 Redis，便于前端在刷新/切换会话后恢复。
+        """
+        if not conv_id:
+            return
+        try:
+            await set_agentic_trace(
+                conv_id,
+                {
+                    "version": 1,
+                    "status": status or "running",
+                    "events": trace_events,
+                    # 记录本轮的用户问题，便于在页面刷新且 DB 尚未落库时恢复一个虚拟的 user 消息
+                    "user_query": req.user_query,
+                },
+            )
+        except Exception as exc:
+            logger.warning("Agentic WS 实时 trace 持久化失败（忽略）: %s", exc)
+
+    # 会话开始即写入 trace，便于用户刚发起就刷新时也能恢复
+    await _persist_live_trace(status="running")
 
     async def on_stream_delta(token: str) -> None:
         """LLM 逐 token 推送——真正的流式体验。"""
@@ -368,6 +423,7 @@ async def agentic_ws(websocket: WebSocket) -> None:
 
     async def on_thought(thought: str, step: int) -> None:
         trace_events.append({"type": "thought", "step": step, "content": thought})
+        await _persist_live_trace(status="thinking")
         await send_json({"event": "thought", "step": step, "content": thought})
 
     async def on_action(tool: str, parameters: Dict[str, Any], step: int) -> None:
@@ -380,6 +436,7 @@ async def agentic_ws(websocket: WebSocket) -> None:
                 "content": "",
             }
         )
+        await _persist_live_trace(status="action")
         await send_json(
             {
                 "event": "action",
@@ -395,6 +452,7 @@ async def agentic_ws(websocket: WebSocket) -> None:
 
     async def on_observation(content: str, step: int) -> None:
         trace_events.append({"type": "observation", "step": step, "content": content})
+        await _persist_live_trace(status="observation")
         await send_json({"event": "observation", "step": step, "content": content})
 
     async def on_final_answer(content: str) -> None:
@@ -433,6 +491,11 @@ async def agentic_ws(websocket: WebSocket) -> None:
                     )
                 except Exception as exc2:
                     logger.exception("Agentic WS 持久化（降级）仍失败: %s", exc2)
+            # 轮次结束后，清理 Redis 中的实时 trace，避免长期占用
+            try:
+                await set_agentic_trace(conv_id, None)
+            except Exception as exc:
+                logger.warning("Agentic WS 清理实时 trace 失败（忽略）: %s", exc)
 
     try:
         await run_agentic_session(
@@ -451,18 +514,19 @@ async def agentic_ws(websocket: WebSocket) -> None:
             on_final_answer=on_final_answer,
             on_stream_delta=on_stream_delta,
         )
-    except WebSocketDisconnect:
-        # 前端断开时静默退出
-        return
     except Exception as exc:  # noqa: BLE001
-        # 出现未捕获异常时，也通过 WebSocket 告诉前端
+        # 出现未捕获异常时，尽量通过 WebSocket 告诉前端；若前端已断开则静默失败
         await send_json(
             {
                 "event": "error",
                 "message": f"Agentic 会话内部错误：{exc}",
             },
         )
-        await websocket.close(code=1011)
+        try:
+            await websocket.close(code=1011)
+        except Exception:
+            # 连接可能已断开，忽略关闭错误
+            pass
 
 
 @router.post("/chat")
@@ -583,5 +647,6 @@ async def agentic_http_chat(req: AgenticChatRequest) -> Dict[str, Any]:
     return {"final_answer": final_answer, "conversation_id": conv_id}
 
 
+router.include_router(deepresearch_router)
 app.include_router(router)
 

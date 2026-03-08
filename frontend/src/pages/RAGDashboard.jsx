@@ -285,8 +285,8 @@ export function RAGDashboard() {
                     <span>{t('knowledgeBase')}</span>
                   </Link>
                   <Link
-                    to="/wiki/search"
-                    className={'header__model-menu-item' + (location.pathname === '/wiki/search' ? ' header__model-menu-item--active' : '')}
+                    to="/deep-research"
+                    className={'header__model-menu-item' + (location.pathname === '/deep-research' ? ' header__model-menu-item--active' : '')}
                     role="menuitem"
                     onClick={() => setAppsMenuOpen(false)}
                   >

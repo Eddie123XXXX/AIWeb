@@ -45,7 +45,8 @@ from infra.elasticsearch import router as es_router
 from infra.mineru.router import router as mineru_router
 from agentic.main import router as agentic_router
 
-# Milvus 依赖 pymilvus，在 uvicorn --reload 子进程中可能缺少 pkg_resources，改为可选加载
+# Milvus / RAG 都做成可选加载：
+# 这样即使向量库或 RAG 依赖暂时没装好，基础登录 / 聊天 / Swagger 仍可先起来排障。
 try:
     from infra.milvus import router as milvus_router
 except Exception as e:
@@ -58,6 +59,7 @@ try:
 except Exception as e:
     rag_router = None
     print(f"⚠️ RAG 路由未加载（可忽略）: {e}")
+
 
 
 @asynccontextmanager
@@ -183,7 +185,9 @@ else:
         )
 
 # Agentic 模式路由（Thought / Action / Observation / Final Answer 循环）
+# 这里不再额外加 `/api` 前缀，因为 `agentic.main` 内部已经带了 `/api/agentic`。
 app.include_router(agentic_router)
+
 
 
 @app.get("/", tags=["root"])
@@ -204,4 +208,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    # Windows 下默认关闭 reload，避免父子进程导致的 404 / 无日志 / 路由未生效等问题。
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

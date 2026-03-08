@@ -3,7 +3,7 @@
 ## 快速导航
 
 - 技术栈：React 18 + Vite
-- 页面与路由：聊天、知识库、登录注册
+- 页面与路由：聊天、知识库、深度研究、登录注册
 - 联调方式：本地代理 `/api` 与 WebSocket
 - 重点模块：`components/`、`hooks/useChat.js`、`utils/`
 
@@ -14,6 +14,7 @@
 
 - 组件化布局（Sidebar / Header / Chat / Input）
 - WebSocket 流式消息管理
+- Agentic / DeepResearch 事件流与恢复
 - Markdown + 代码高亮 + 复制按钮
 - 国际化（中英文切换）
 
@@ -80,8 +81,9 @@ npm run preview
 | `/` | 主聊天页（首页，需登录） |
 | `/wiki` | RAG 知识库 / 仪表盘（需登录，笔记本 emoji、解析等待+贪吃蛇） |
 | `/wiki/search` | RAG 搜索页（需登录） |
+| `/deep-research` | 深度研究页（需登录，规划/继续研究/报告编辑/PDF 导出） |
 
-未登录访问 `/`、`/wiki`、`/wiki/search` 会重定向到 `/login`；已登录访问 `/login` 或 `/register` 会重定向到 `/`，  
+未登录访问 `/`、`/wiki`、`/wiki/search`、`/deep-research` 会重定向到 `/login`；已登录访问 `/login` 或 `/register` 会重定向到 `/`，  
 保证「先登录，再玩 AI」，体验和安全感都在线。🔐
 
 ## 🔌 与后端联调
@@ -89,6 +91,12 @@ npm run preview
 1. 启动后端：`cd backend && uvicorn main:app --host 0.0.0.0 --port 8000`
 2. 启动前端：`cd frontend && npm run dev`
 3. 浏览器访问 `http://localhost:5173`，前端通过 Vite 代理将 `/api` 和 WebSocket 请求转发到 8000 端口。
+
+补充说明：
+
+- `vite.config.js` 将 `/api` 代理到 `http://127.0.0.1:8000`，并开启 WebSocket 代理。
+- 生产构建输出目录是 `frontend/dist/build`，如果你要接入 Nginx / Caddy / 静态托管平台，请以这个目录为静态资源根。
+- 若后端不跑在 `8000`，记得同步修改 `vite.config.js` 里的代理目标。
 
 ## 🎤 语音输入与「不安全」提示
 
@@ -118,6 +126,8 @@ npm run preview
 - 🎤 **语音输入**：`InputArea` 支持麦克风录音；安全上下文（localhost/https）下使用 Web Speech API，否则上传 webm 走后端 ASR（Qwen3-ASR-Flash）。
 - 🧩 **Agentic 推理与工具调用**：`Header` 提供 Agentic 模式开关；开启后 `useChat` 切换使用 Agentic WebSocket（`/api/agentic/ws`），支持 token 级流式（`stream_delta`）与工具结果流式（`observation_delta`）；`AgenticReasoningPanel` 展示 thought / action / observation 事件流；`EChartsRenderer` 渲染 `chart_generator` 生成的图表；`Welcome` 与 `InputArea` 右下「更多」区域展示可用工具列表，可通过 `AddMCPServerModal` 一键添加 MCP Server。
 - 📚 **RAG 页**：知识源勾选、检索文档卡片（表格/图片/公式富文本）、展开文件定位高亮、来源指南展示；笔记本 **emoji** 优先用列表返回的 `emoji`，无则请求 `POST /api/rag/emoji-from-title` 后通过 `PATCH /api/rag/notebooks/{id}/emoji` 保存；上传失败时解析 409/400 展示「重复上传」「不支持格式」等提示；解析中可打开「解析等待」弹窗（内含贪吃蛇小游戏）。
+- 🔎 **DeepResearch 页**：`pages/DeepResearch.jsx` 负责规划、继续研究、步骤条、思考面板、报告正文编辑、局部改写建议、历史会话恢复与 PDF 下载；研究态通过 SSE 消费 `/api/agentic/deepresearch/*` 事件，而不是复用普通聊天 WebSocket。
+- ♻️ **恢复机制**：`App.jsx` 会优先恢复上次会话 ID、Agentic trace 与普通聊天流状态；DeepResearch 则依赖后端返回的 `ui_state` 恢复章节、步骤、来源和面板日志。
 
 ---
 
@@ -148,4 +158,15 @@ npm run preview
 | 请求 | `fetch` / WebSocket；Vite 代理 `/api` 与 ws 到后端 8000；`ragApi.js` 封装 RAG 相关 API |
 | 渲染 | Markdown+LaTeX（marked + KaTeX）、代码高亮（highlight.js）、RAG 卡片富文本与展开弹窗 |
 
-> 原静态页面仍保留在 `index.html` 中被 Vite 接管；样式备份在 `css/main.css`，逻辑在 `js/main.js`。🧪
+## 🚢 生产部署提示
+
+- 构建命令：`npm run build`
+- 输出目录：`dist/build`
+- 反向代理时需要同时转发：
+  - `/api/*` HTTP 请求到后端
+  - `/api/*` 的 WebSocket 升级请求到后端
+- 如果你把前端和后端分域部署，需要额外确认：
+  - 后端 CORS 白名单是否包含你的前端域名
+  - WebSocket 代理是否允许 `Upgrade` / `Connection: upgrade`
+
+> `css/main.css` 和 `js/main.js` 仍保留为旧静态实现参考，不参与当前 React + Vite 运行时入口。🧪

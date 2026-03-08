@@ -10,6 +10,9 @@
 本目录包含 Agentic 模式下的所有工具实现，供 LLM 在 ReAct 循环中调用。  
 一工具一文件，内置工具在应用启动时自动注册，扩展工具由配置、SKILLS 目录或 MCP Server 动态加载。📦
 
+前端聊天页里的“更多工具”复选框，本质上就是对这里注册出来的工具做白名单过滤：  
+工具注册了，不代表每轮都一定暴露给模型；是否启用，还要看前端本轮勾选结果。
+
 ## ✨ 内置工具
 
 以下工具在 `tools_registry.register_builtins()` 中自动注册，全局可用。
@@ -83,3 +86,18 @@
 4. `discover_and_register_mcp_tools()`：并发向所有启用的 MCP Server 调用 `list_tools`，将每个远端工具包装为 RemoteMCPTool 并注册到 `ToolRegistry`（不覆盖已有同名工具）  
 
 详见 `agentic/tools_registry.py` 与 `agentic/mcp_manager.py`。
+
+## 🧭 工具选择建议
+
+- `user_memory`：适合问“我之前说过什么”“用户长期偏好是什么”
+- `knowledge_search`：适合查本地知识库、文档片段和项目资料
+- `web_search`：适合补充最新公开信息
+- `data_analyzer`：适合先做结构化分析，再把结果交给 `chart_generator`
+- `chart_generator`：适合把已有分析结果转成前端可渲染的 ECharts 配置
+
+如果你要新增工具，优先判断它属于：
+
+- 内置能力：直接在 `tools/` 下实现并注册
+- 项目内技能：走 `SKILLS/*.md + *.py`
+- 外部系统：走 MCPTool / RemoteMCPTool
+- 专家子助手：走 WorkerTool

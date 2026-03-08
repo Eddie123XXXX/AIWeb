@@ -290,7 +290,7 @@
 
 - **依赖**：`asyncpg`、`pymilvus`、`openai`（Dense Embedding / VLM）、`httpx`。
 - **建表**：`db/schema_documents.sql`、`db/schema_document_chunks.sql`，执行 `python -m db.run_schema`。
-- **来源指南（文档总结）**：需为 `documents` 表增加 `summary` 列，执行 `python -m rag.migrate_add_summary`（PostgreSQL 9.6+）。总结由 LLM 在首次展开文件时生成并入库，大文档会截断到 `RAG_SUMMARY_MAX_CHARS`（默认 6000）再送模型；可选 `RAG_SUMMARY_BASE_URL`、`RAG_SUMMARY_API_KEY`、`RAG_SUMMARY_MODEL`，未配置时回退到 `OPENAI_API_KEY` / `QWEN_API_KEY`。
+- **来源指南（文档总结）**：`documents.summary` 已纳入主 schema，新库执行 `python -m db.run_schema` 即可获得该字段。总结由 LLM 在首次展开文件时生成并入库，大文档会截断到 `RAG_SUMMARY_MAX_CHARS`（默认 6000）再送模型；可选 `RAG_SUMMARY_BASE_URL`、`RAG_SUMMARY_API_KEY`、`RAG_SUMMARY_MODEL`，未配置时回退到 `OPENAI_API_KEY` / `QWEN_API_KEY`。
 - **测试**：`python -m rag.test_rag`（需 MinIO、PostgreSQL、Milvus 与 .env）。
 - **导出 Markdown**：`python -m rag.export_markdown`，按 document_id 从 chunk 还原到 `rag/exports/`。
 - **清空 RAG 数据**：`RAG_CLEAR_CONFIRM=yes python -m rag.clear_rag_data`（清空 Postgres 相关表、Milvus collection、MinIO rag/）。

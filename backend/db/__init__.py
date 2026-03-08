@@ -5,6 +5,7 @@ from .oauth_repository import oauth_repository
 from .profile_repository import profile_repository
 from .user_repository import user_repository
 from .agent_memory_repository import agent_memory_repository
+from .research_session_repository import research_session_repository
 
 __all__ = [
     "conversation_repository",
@@ -13,4 +14,5 @@ __all__ = [
     "profile_repository",
     "user_repository",
     "agent_memory_repository",
+    "research_session_repository",
 ]

@@ -9,6 +9,7 @@
   - `backend/rag/README.md`
   - `backend/memory/README.md`
   - `backend/agentic/README.md`
+  - `backend/agentic/deepresearch/README.md`
   - `backend/db/README.md`
   - `backend/infra/README.md`
 
@@ -34,6 +35,7 @@
 - 🧠 **记忆管理 API**：`GET/POST/PUT/DELETE /api/memory/*`，支持列表、新增、编辑、删除记忆；编辑时重新计算 embedding
 - 🔐 **JWT 认证**：登录签发 token，`backend/.env` 中 `JWT_SECRET`、`JWT_EXPIRE_SECONDS` 等
 - 🧩 **Agentic 模式（ReAct + 工具调用）**：`/api/agentic/ws` token 级流式（`stream_delta`、`observation_delta`）+ Thought / Action / Observation / Final Answer，`/api/agentic/chat` 非流式；内置工具：`user_memory`、`knowledge_search`、`web_search`、`data_analyzer`、`chart_generator`；支持 SkillTool（`backend/agentic/SKILLS`）与 MCP 工具（`/api/agentic/mcp-servers` 与 `/api/agentic/mcp-servers/add`）
+- 🔎 **DeepResearch**：`/api/agentic/deepresearch/*` 基于 SSE 的深度研究链路，支持章节规划、用户确认、继续研究、历史恢复、局部改写与 PDF 导出；研究会话落在独立的 `research_sessions` 表系
 
 ## 🚀 快速开始
 
@@ -58,7 +60,15 @@ pip install -r requirements.txt
 # 使用venv环境命令行
 .\.venv\Scripts\Activate.ps1
 
-### 2. 启动服务（后端）
+### 2. 建表与启动服务（后端）
+
+首次运行前，先确保 PostgreSQL 已启动，然后执行：
+
+```bash
+python -m db.run_schema
+```
+
+`db.run_schema` 会按顺序创建用户、会话、记忆、RAG、DeepResearch 相关表；当前新库初始化**不再需要**额外执行单独的补列迁移脚本。
 
 **Windows 推荐不用 `--reload`**（否则 uvicorn 父子进程可能导致请求到不了应用，出现 404/无响应、终端无日志）：
 
@@ -73,12 +83,30 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 需要热重载时再使用 `--reload`（若出现访问无响应，请改回上述方式）。
 
+如果你已经启动了 `infra/docker-compose.yml` 的完整面板集合，需要注意 `Attu` 默认占用宿主机 `8000`。此时可以：
+
+- 暂时停掉 `Attu`
+- 修改 `infra/docker-compose.yml` 中 `Attu` 的端口映射
+- 或让后端改跑 `8001` / 其他端口
+
 ### 3. 访问 API 文档（Swagger / ReDoc）
 
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
 你可以把后端当成标准的「OpenAI 风格 API」，也可以直接在 Swagger 里玩。😄
+
+## 🧱 最小依赖矩阵
+
+| 能力 | 必需依赖 | 补充说明 |
+|------|----------|----------|
+| 登录 / 会话 / 历史 | PostgreSQL | 不接 PostgreSQL 时，用户体系与历史恢复不可用 |
+| 普通聊天 | 至少一个可用模型 API Key | 建议同时启用 PostgreSQL + Redis，便于恢复流与历史 |
+| Quick Parse | MinIO | 只影响聊天下的临时文件上传与解析 |
+| 长期记忆 | PostgreSQL + Milvus + `QWEN_API_KEY` + `DEEPSEEK_API_KEY` | Qwen 做 embedding，DeepSeek 做重要性打分 / 路由 / 反思 |
+| RAG | PostgreSQL + MinIO + Milvus + `QWEN_API_KEY` | 可选接入 MinerU、Jina Reranker、图片 VLM |
+| Agentic | 普通聊天依赖 + 可用工具配置 | 联网搜索依赖 `SERPER_API_KEY` 或 `BOCHA_API_KEY` |
+| DeepResearch | Agentic 依赖 + `research_sessions` 表 | 当前固定使用 `deepseek-v3.2`，并非把前端 `model_id` 原样透传到底层 |
 
 ---
 
@@ -103,6 +131,13 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 - **文档**：上传 → 同笔记本重复返回 **409**，不支持的文件类型返回 **400**（前端可解析 `detail` 做「重复上传」「不支持格式」提示）→ SHA-256 防重/秒传 → MinIO；`/process` 触发解析（MinerU 或多格式）→ Block 规范化 → 图片上传+VLM 可选 → 版面感知切块 → PostgreSQL 存全量切片，仅 Child 做 Dense+Sparse 向量化写 Milvus。来源指南：`GET /documents/{id}/markdown` 若无 summary 则截断内容调 LLM 生成并入库。
 - **笔记本 emoji**：`POST /api/rag/emoji-from-title`（body：`title`）根据名称用 DeepSeek 生成 emoji，失败时关键词兜底；`PATCH /api/rag/notebooks/{id}/emoji`（body：`emoji`）保存到 `notebooks.emoji`；列表接口返回 `emoji`，重命名时后端清空 emoji。
 
+### DeepResearch 流程
+
+1. 前端调用 `POST /api/agentic/deepresearch/stream`，后端先进入 `planning_only` 阶段生成章节框架与研究问题。
+2. 用户在前端确认或编辑章节后，再调用继续研究接口，后端开始搜索、写作、审校，并持续通过 SSE 推送阶段事件。
+3. 研究会话不会写入普通聊天的 `conversations/messages`，而是单独落在 `research_sessions`，同时把 `outline`、`panel_log`、`references`、`draft_sections` 等 UI 恢复数据写进 `ui_state`。
+4. 研究完成后可在前端继续编辑正文、局部改写，并通过 PDF 导出接口生成最终报告。
+
 ### 技术流程（分层）
 
 | 层 | 模块 | 职责 |
@@ -110,6 +145,12 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 | 路由 | routers/chat, history, models, user, asr, memory; auth; rag/router | HTTP/WebSocket 入口、参数校验、调用 service |
 | 业务 | services/chat_context, llm_service, quick_parse; memory; rag/service | 会话与历史、LLM 调用、记忆写入/召回、RAG 编排与检索 |
 | 存储 | db/*_repository; infra (Redis, Postgres, MinIO, Milvus) | 用户/会话/消息/记忆/文档与切片的 CRUD、向量与对象存储 |
+
+### 模型配置的真实行为
+
+- `/api/models` 当前是**进程内内存态**配置，不会自动持久化到数据库。
+- 服务启动时会根据环境变量自动预注册一批默认模型，如 `openai-default`、`deepseek-default`、`qwen-default`。
+- 如果你在页面里手动新增了一个模型，服务重启后它不会自动回来；只有环境变量驱动的默认模型会重新注册。
 
 ---
 

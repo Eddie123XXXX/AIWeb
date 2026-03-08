@@ -7,7 +7,13 @@ from fastapi.responses import StreamingResponse
 
 from models import ChatRequest, ChatResponse, Message, Role
 from db.conversation_repository import conversation_repository
-from services.chat_context import get_context, get_memory_context_for_prompt, persist_round
+from services.chat_context import (
+    get_context,
+    get_memory_context_for_prompt,
+    persist_round,
+    set_chat_stream_state,
+    get_chat_stream_state,
+)
 from services.llm_service import (
     LLMService,
     generate_sse_stream,
@@ -112,6 +118,16 @@ async def _resolve_conversation_and_messages(request: ChatRequest) -> tuple[str 
         messages.extend(rest)
 
     return request.conversation_id, messages
+
+
+@router.get("/stream", summary="查询普通 Chat 流式状态")
+async def get_chat_stream(conversation_id: str):
+    """
+    查询某会话当前进行中的 Chat 流式输出状态（刷新后恢复用）。
+    若没有进行中的流，返回 null。
+    """
+    state = await get_chat_stream_state(conversation_id)
+    return {"conversation_id": conversation_id, "stream": state}
 
 
 @router.post("", summary="发送聊天消息")
@@ -238,25 +254,54 @@ async def websocket_chat(websocket: WebSocket):
 
             if request.stream:
                 accumulated = []
+                client_disconnected = False
+
+                async def safe_send(obj: dict):
+                    nonlocal client_disconnected
+                    if client_disconnected:
+                        return
+                    try:
+                        await websocket.send_json(obj)
+                    except (WebSocketDisconnect, Exception):
+                        client_disconnected = True
+
                 try:
+                    if conversation_id:
+                        await set_chat_stream_state(
+                            conversation_id, user_content, "", status="streaming"
+                        )
                     async for content in llm_service.chat_stream(
                         messages_for_llm,
                         request.temperature,
                         request.max_tokens,
                     ):
                         accumulated.append(content)
-                        await websocket.send_json({"content": content, "done": False})
+                        if conversation_id:
+                            await set_chat_stream_state(
+                                conversation_id,
+                                user_content,
+                                "".join(accumulated),
+                                status="streaming",
+                            )
+                        await safe_send({"content": content, "done": False})
                     full_reply = "".join(accumulated)
                     if conversation_id:
                         await persist_round(
                             conversation_id, user_content, full_reply,
                             model_id=request.model_id or "default",
                         )
-                    await websocket.send_json(
+                        await set_chat_stream_state(
+                            conversation_id, user_content, full_reply, status="done"
+                        )
+                    await safe_send(
                         {"content": "", "done": True, "conversation_id": request.conversation_id}
                     )
                 except Exception as e:
-                    await websocket.send_json(
+                    if conversation_id:
+                        await set_chat_stream_state(
+                            conversation_id, user_content, "".join(accumulated), status="done"
+                        )
+                    await safe_send(
                         {"error": f"调用 LLM 失败: {str(e)}", "done": True}
                     )
             else:

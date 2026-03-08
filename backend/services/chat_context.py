@@ -25,9 +25,72 @@ CHAT_CONTEXT_KEY_PREFIX = "chat:context:"
 CONTEXT_TTL_SECONDS = 86400  # 24 小时
 CONTEXT_WINDOW_SIZE = 20  # 保留最近 20 条消息
 
+# Agentic 实时推理 trace 在 Redis 中的 key 前缀
+AGENTIC_TRACE_KEY_PREFIX = "agentic:trace:"
+# 普通 Chat 流式输出中间状态
+CHAT_STREAM_KEY_PREFIX = "chat:stream:"
+
 
 def _context_key(conversation_id: str) -> str:
     return f"{CHAT_CONTEXT_KEY_PREFIX}{conversation_id}"
+
+
+def _agentic_trace_key(conversation_id: str) -> str:
+    return f"{AGENTIC_TRACE_KEY_PREFIX}{conversation_id}"
+
+
+def _chat_stream_key(conversation_id: str) -> str:
+    return f"{CHAT_STREAM_KEY_PREFIX}{conversation_id}"
+
+
+async def set_chat_stream_state(
+    conversation_id: str,
+    user_content: str,
+    assistant_content: str,
+    status: str = "streaming",
+    ttl: int = CONTEXT_TTL_SECONDS,
+) -> None:
+    """
+    将普通 Chat 流式输出的中间状态写入 Redis，便于刷新后恢复。
+    status: 'streaming' | 'done'
+    """
+    if not conversation_id:
+        return
+    key = _chat_stream_key(conversation_id)
+    try:
+        if status == "done":
+            await redis_service.delete_key(key)
+            return
+        payload = json.dumps(
+            {"user_content": user_content, "assistant_content": assistant_content, "status": status},
+            ensure_ascii=False,
+        )
+        await redis_service.set_key(key, payload, ttl_seconds=ttl)
+    except Exception as e:
+        logger.warning("写入 Chat 流式状态失败（忽略）: %s", e)
+
+
+async def get_chat_stream_state(conversation_id: str) -> dict[str, Any] | None:
+    """
+    读取某会话当前进行中的 Chat 流式状态。
+    """
+    if not conversation_id:
+        return None
+    key = _chat_stream_key(conversation_id)
+    try:
+        raw = await redis_service.get_key(key)
+    except Exception as e:
+        logger.warning("读取 Chat 流式状态失败（忽略）: %s", e)
+        return None
+    if not raw:
+        return None
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict):
+            return obj
+    except Exception:
+        return None
+    return None
 
 
 def _fallback_title_from_user_content(user_content: str) -> str:
@@ -60,7 +123,7 @@ async def get_context(conversation_id: str, limit: int = CONTEXT_WINDOW_SIZE) ->
     if raw_list:
         # 缓存命中
         out = []
-        for s in raw_list:
+        for s in raw_list:  
             try:
                 obj = json.loads(s)
                 out.append({"role": obj.get("role", "user"), "content": obj.get("content", "")})
@@ -82,6 +145,57 @@ async def get_context(conversation_id: str, limit: int = CONTEXT_WINDOW_SIZE) ->
             pass
 
     return out
+
+
+async def set_agentic_trace(
+    conversation_id: str,
+    trace: dict[str, Any] | None,
+    ttl: int = CONTEXT_TTL_SECONDS,
+) -> None:
+    """
+    将 Agentic 当前轮的推理 trace 实时写入 Redis。
+
+    语义：
+    - trace 为 None：删除 key，表示当前无进行中的 Agentic 轮次；
+    - 否则写入 JSON（version/status/events/user_query 等），并设置 TTL。
+    """
+    if not conversation_id:
+        return
+    key = _agentic_trace_key(conversation_id)
+    try:
+        if trace is None:
+            await redis_service.delete_key(key)
+            return
+        payload = json.dumps(trace, ensure_ascii=False)
+        await redis_service.set_key(key, payload, ttl_seconds=ttl)
+    except Exception as e:
+        logger.warning("写入 Agentic 实时 trace 失败（忽略，不影响主流程）: %s", e)
+
+
+async def get_agentic_trace(conversation_id: str) -> dict[str, Any] | None:
+    """
+    读取某会话当前进行中的 Agentic 推理 trace。
+
+    - 若 key 不存在或解析失败，返回 None；
+    - 若存在，则返回形如 {version, status, events} 的字典。
+    """
+    if not conversation_id:
+        return None
+    key = _agentic_trace_key(conversation_id)
+    try:
+        raw = await redis_service.get_key(key)
+    except Exception as e:
+        logger.warning("读取 Agentic 实时 trace 失败（忽略，不影响主流程）: %s", e)
+        return None
+    if not raw:
+        return None
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict):
+            return obj
+    except Exception:
+        return None
+    return None
 
 
 async def get_memory_context_for_prompt(

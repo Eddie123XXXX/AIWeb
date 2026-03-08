@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI Workspace - Dark Mode</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3b82f6",
+                        "background-main": "#0F0F10",
+                        "sidebar-bg": "#18181B",
+                        "charcoal": "#E5E7EB",
+                        "charcoal-light": "#9CA3AF",
+                        "card-bg": "#1F2937",
+                        "border-color": "#374151",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    boxShadow: {
+                        "soft": "0 10px 30px -5px rgba(0, 0, 0, 0.5)",
+                        "card": "0 4px 6px -1px rgba(0, 0, 0, 0.2)",
+                    }
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4B5563;
+            border-radius: 3px;
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.6s ease-out forwards;
+            opacity: 0;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        details > summary {
+            list-style: none;
+        }
+        details > summary::-webkit-details-marker {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-background-main font-display text-charcoal h-screen overflow-hidden selection:bg-blue-900 selection:text-blue-100">
+<div class="flex h-full w-full">
+<aside class="hidden md:flex flex-col w-[280px] h-full bg-sidebar-bg border-r border-border-color flex-shrink-0 z-20">
+<div class="p-4 flex flex-col gap-4">
+<div class="flex items-center justify-between px-2">
+<button class="flex items-center gap-2 text-charcoal-light hover:bg-gray-800 p-2 rounded-lg transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+<button class="flex items-center gap-3 w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-charcoal px-4 py-3 rounded-xl transition-all shadow-sm hover:shadow-md">
+<span class="material-symbols-outlined text-primary">add</span>
+<span class="text-sm font-medium">New Chat</span>
+</button>
+</div>
+<div class="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+<p class="px-3 text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Recent</p>
+<button class="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg bg-zinc-800/50 shadow-sm border border-zinc-700 text-primary group transition-all">
+<span class="material-symbols-outlined text-[20px] filled">chat_bubble</span>
+<span class="text-sm font-semibold truncate flex-1 text-left">Project brainstorming</span>
+</button>
+<button class="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-charcoal-light hover:bg-zinc-800/50 hover:text-charcoal transition-colors group">
+<span class="material-symbols-outlined text-[20px]">history</span>
+<span class="text-sm font-medium truncate flex-1 text-left">React component help</span>
+</button>
+<button class="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-charcoal-light hover:bg-zinc-800/50 hover:text-charcoal transition-colors group">
+<span class="material-symbols-outlined text-[20px]">history</span>
+<span class="text-sm font-medium truncate flex-1 text-left">Marketing copy V2</span>
+</button>
+<button class="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-charcoal-light hover:bg-zinc-800/50 hover:text-charcoal transition-colors group">
+<span class="material-symbols-outlined text-[20px]">history</span>
+<span class="text-sm font-medium truncate flex-1 text-left">Python script debug</span>
+</button>
+</div>
+<div class="p-4 border-t border-zinc-800 bg-sidebar-bg">
+<div class="flex flex-col gap-1">
+<button class="flex items-center gap-3 px-3 py-2 rounded-lg text-charcoal-light hover:bg-zinc-800/50 hover:text-charcoal transition-colors">
+<span class="material-symbols-outlined text-[20px]">help</span>
+<span class="text-sm font-medium">Help &amp; FAQ</span>
+</button>
+<button class="flex items-center gap-3 px-3 py-2 rounded-lg text-charcoal-light hover:bg-zinc-800/50 hover:text-charcoal transition-colors">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="text-sm font-medium">Settings</span>
+</button>
+<div class="flex items-center gap-3 mt-4 pt-4 border-t border-zinc-800 px-2">
+<div class="bg-center bg-no-repeat bg-cover rounded-full size-9 shadow-sm shrink-0 border border-zinc-700" data-alt="User Avatar" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuD8n8vhDOUHJ1ie1nPFlLK9kIh5Uz_wyYfZqBeM-zCbDnfklq03_rvgoFsFWPkavnlcVplDIQDr4LMBqZCOrSVmOkE0XgDXLqtkudtMTnlLNxkweynVLBRw6CgxvjQomMBKt5z3MJfzmNWShbEaYfqRJdMJMqgJb1XaKcZn7gC3MAABOKNiN0pt69AkR3bIZV5IEFSLBgU1aKN6Dz_Fi0ePxjwWqIcZfvHW6sHp_oZdGECPcoOduf5dny9zdgWqVcQ5wH0ik0A6fSM");'></div>
+<div class="flex flex-col overflow-hidden">
+<span class="text-sm font-bold text-charcoal truncate">Alex Morgan</span>
+<span class="text-xs text-gray-500 truncate">Free Plan</span>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<main class="flex-1 flex flex-col h-full relative bg-background-main">
+<header class="flex items-center justify-between px-6 py-4 sticky top-0 z-10 bg-background-main/90 backdrop-blur-md">
+<div class="flex items-center gap-2 md:hidden">
+<button class="text-charcoal-light p-2 hover:bg-zinc-800 rounded-lg transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-800 transition-all text-charcoal group shadow-sm">
+<span class="text-lg font-bold tracking-tight bg-gradient-to-r from-gray-100 to-gray-400 bg-clip-text text-transparent">Gemini Advanced</span>
+<span class="material-symbols-outlined text-[20px] text-gray-500 group-hover:text-charcoal transition-colors">keyboard_arrow_down</span>
+</button>
+</div>
+<div class="flex items-center gap-3">
+<button class="size-10 flex items-center justify-center rounded-full bg-zinc-900 border border-zinc-800 text-charcoal-light hover:text-primary hover:border-blue-900/50 hover:shadow-md transition-all" title="Toggle theme">
+<span class="material-symbols-outlined text-[22px]">dark_mode</span>
+</button>
+<button class="size-10 flex items-center justify-center rounded-full bg-zinc-900 border border-zinc-800 text-charcoal-light hover:text-primary hover:border-blue-900/50 hover:shadow-md transition-all">
+<span class="material-symbols-outlined text-[22px]">apps</span>
+</button>
+<button class="h-10 px-5 rounded-full bg-white hover:bg-gray-100 text-black text-sm font-semibold transition-all shadow-lg shadow-black/40 flex items-center">
+                    Log out
+                </button>
+</div>
+</header>
+<div class="flex-1 overflow-y-auto flex flex-col items-center justify-center p-4 pb-32 w-full">
+<div class="w-full max-w-3xl flex flex-col gap-8 animate-fade-in">
+<div class="flex flex-col gap-3 py-6">
+<div class="size-14 mb-2 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/40">
+<span class="material-symbols-outlined text-white text-[32px]">colors_spark</span>
+</div>
+<h1 class="text-4xl md:text-6xl font-extrabold tracking-tight text-charcoal">
+<span class="gradient-text">Hello, Alex</span>
+</h1>
+<h2 class="text-2xl md:text-3xl font-medium text-gray-500">
+                        How can I help you today?
+                    </h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+<button class="flex flex-col items-start gap-3 p-5 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-card hover:shadow-md hover:border-blue-900/50 hover:-translate-y-0.5 transition-all text-left group">
+<div class="p-2.5 rounded-xl bg-blue-900/20 text-blue-400 group-hover:scale-110 transition-transform duration-300">
+<span class="material-symbols-outlined text-[24px]">lightbulb</span>
+</div>
+<div>
+<span class="text-charcoal font-semibold block mb-1">Brainstorm ideas</span>
+<span class="text-sm text-gray-500 line-clamp-1">Generate creative concepts for a new marketing campaign</span>
+</div>
+</button>
+<button class="flex flex-col items-start gap-3 p-5 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-card hover:shadow-md hover:border-purple-900/50 hover:-translate-y-0.5 transition-all text-left group">
+<div class="p-2.5 rounded-xl bg-purple-900/20 text-purple-400 group-hover:scale-110 transition-transform duration-300">
+<span class="material-symbols-outlined text-[24px]">code</span>
+</div>
+<div>
+<span class="text-charcoal font-semibold block mb-1">Write code</span>
+<span class="text-sm text-gray-500 line-clamp-1">Create a Python script to parse CSV files</span>
+</div>
+</button>
+<button class="flex flex-col items-start gap-3 p-5 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-card hover:shadow-md hover:border-emerald-900/50 hover:-translate-y-0.5 transition-all text-left group">
+<div class="p-2.5 rounded-xl bg-emerald-900/20 text-emerald-400 group-hover:scale-110 transition-transform duration-300">
+<span class="material-symbols-outlined text-[24px]">flight_takeoff</span>
+</div>
+<div>
+<span class="text-charcoal font-semibold block mb-1">Plan a trip</span>
+<span class="text-sm text-gray-500 line-clamp-1">Suggest a 3-day itinerary for Tokyo</span>
+</div>
+</button>
+<button class="flex flex-col items-start gap-3 p-5 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-card hover:shadow-md hover:border-amber-900/50 hover:-translate-y-0.5 transition-all text-left group">
+<div class="p-2.5 rounded-xl bg-amber-900/20 text-amber-400 group-hover:scale-110 transition-transform duration-300">
+<span class="material-symbols-outlined text-[24px]">edit_note</span>
+</div>
+<div>
+<span class="text-charcoal font-semibold block mb-1">Draft an email</span>
+<span class="text-sm text-gray-500 line-clamp-1">Write a professional follow-up email after an interview</span>
+</div>
+</button>
+</div>
+</div>
+</div>
+<div class="w-full flex justify-center pb-6 px-4 absolute bottom-0 bg-gradient-to-t from-background-main via-background-main to-transparent pt-12 z-20">
+<div class="w-full max-w-3xl">
+<div class="relative flex flex-col bg-zinc-900 rounded-[2rem] border border-zinc-800 shadow-soft focus-within:shadow-2xl focus-within:border-zinc-700 transition-all duration-300">
+<textarea class="w-full bg-transparent border-none text-charcoal placeholder:text-gray-600 px-6 py-5 resize-none focus:ring-0 max-h-48 overflow-y-auto text-lg" placeholder="Enter a prompt here..." rows="1" style="min-height: 64px;"></textarea>
+<div class="flex items-center justify-between px-4 pb-4 pl-6">
+<div class="flex items-center gap-1">
+<button class="p-2.5 text-gray-500 hover:text-primary hover:bg-zinc-800 rounded-full transition-colors" title="Upload image">
+<span class="material-symbols-outlined text-[22px]">add_photo_alternate</span>
+</button>
+<button class="p-2.5 text-gray-500 hover:text-primary hover:bg-zinc-800 rounded-full transition-colors" title="Use Microphone">
+<span class="material-symbols-outlined text-[22px]">mic</span>
+</button>
+<details class="relative">
+<summary class="p-2.5 text-gray-500 hover:text-primary hover:bg-zinc-800 rounded-full transition-colors cursor-pointer list-none flex items-center justify-center outline-none" title="More options">
+<span class="material-symbols-outlined text-[22px]">more_horiz</span>
+</summary>
+<div class="absolute bottom-full left-0 mb-3 w-64 bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-800 p-2 flex flex-col gap-1 z-50 animate-fade-in origin-bottom-left">
+<button class="w-full text-left px-3 py-2.5 text-sm font-medium text-charcoal-light hover:text-charcoal hover:bg-zinc-800 rounded-xl transition-colors flex items-center gap-3">
+<span class="material-symbols-outlined text-[20px]">description</span>
+<span>Browse local files</span>
+</button>
+<button class="w-full text-left px-3 py-2.5 text-sm font-medium text-charcoal-light hover:text-charcoal hover:bg-zinc-800 rounded-xl transition-colors flex items-center gap-3">
+<span class="material-symbols-outlined text-[20px]">mic_external_on</span>
+<span>Voice input settings</span>
+</button>
+<div class="h-px bg-zinc-800 my-1 mx-2"></div>
+<button class="w-full text-left px-3 py-2.5 text-sm font-medium text-charcoal-light hover:text-charcoal hover:bg-zinc-800 rounded-xl transition-colors flex items-center gap-3">
+<span class="material-symbols-outlined text-[20px]">tune</span>
+<span>Response preferences</span>
+</button>
+</div>
+</details>
+</div>
+<button class="p-3 bg-primary hover:bg-blue-600 text-white rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-500/20 group">
+<span class="material-symbols-outlined text-[20px] group-hover:translate-x-0.5 transition-transform">send</span>
+</button>
+</div>
+</div>
+<p class="text-center text-xs text-gray-600 mt-4 font-medium">
+                    AI may display inaccurate info, including about people, so double-check its responses.
+                </p>
+</div>
+</div>
+</main>
+</div>
+
+</body></html>

@@ -4,13 +4,17 @@ RAG 知识库 FastAPI 路由（挂载于 /api/rag）
 实现流程概要：上传(防重/秒传)→MinIO；process 触发解析→Block 规范化→切块→PostgreSQL+Milvus；
 search 为三段式检索(精确+Sparse+Dense→RRF→Reranker)，支持 document_ids 限定范围；
 markdown 返回片段与来源指南(summary)，无则生成并入库。详见 backend/rag/README.md。
+
+所有接口均依赖当前登录用户，按 user_id 隔离数据。
 """
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+
+from auth.dependencies import get_current_user_id
 
 from . import parsers, service
 from .chunk_repository import chunk_repository
@@ -33,8 +37,28 @@ logger = logging.getLogger("rag.router")
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
-# TODO: 接入真实用户认证后替换为 Depends(get_current_user)
-_DEFAULT_USER_ID = 1
+CurrentUserId = Annotated[int, Depends(get_current_user_id)]
+
+
+async def _ensure_notebook_owner(notebook_id: str, user_id: int) -> dict:
+    """校验笔记本存在且属于当前用户，否则 404/403。返回笔记本记录。"""
+    row = await notebook_repository.get_by_id(notebook_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="笔记本不存在")
+    if row["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="无权操作该笔记本")
+    return row
+
+
+async def _ensure_document_owner(doc_id: str, user_id: int) -> dict:
+    """校验文档存在且所属笔记本属于当前用户，否则 404/403。返回文档记录。"""
+    doc = await document_repository.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    nb = await notebook_repository.get_by_id(doc["notebook_id"])
+    if not nb or nb["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="无权操作该文档")
+    return doc
 
 
 # ---------------------------------------------------------------------------
@@ -43,11 +67,11 @@ _DEFAULT_USER_ID = 1
 
 @router.get("/notebooks", summary="笔记本列表")
 async def list_notebooks(
-    user_id: int = _DEFAULT_USER_ID,
+    user_id: CurrentUserId,
     limit: int = 50,
     offset: int = 0,
 ):
-    """按用户查询笔记本列表，含知识源数量、最后更新时间与首个已解析文档的来源指南"""
+    """按当前登录用户查询笔记本列表，含知识源数量、最后更新时间与首个已解析文档的来源指南"""
     rows = await notebook_repository.list_by_user(user_id, limit=limit, offset=offset)
     return [
         NotebookOut(
@@ -68,7 +92,7 @@ async def list_notebooks(
 @router.post("/notebooks", response_model=NotebookOut, summary="创建笔记本")
 async def create_notebook(
     body: NotebookCreate,
-    user_id: int = _DEFAULT_USER_ID,
+    user_id: CurrentUserId,
 ):
     """创建新笔记本，返回 id 供后续上传文档使用"""
     import uuid
@@ -92,7 +116,8 @@ async def create_notebook(
 
 
 @router.put("/notebooks/{notebook_id}", response_model=NotebookOut, summary="更新笔记本")
-async def update_notebook(notebook_id: str, body: NotebookCreate):
+async def update_notebook(notebook_id: str, body: NotebookCreate, user_id: CurrentUserId):
+    await _ensure_notebook_owner(notebook_id, user_id)
     row = await notebook_repository.update(notebook_id, body.title or "未命名笔记本")
     if not row:
         raise HTTPException(status_code=404, detail="笔记本不存在")
@@ -103,7 +128,8 @@ async def update_notebook(notebook_id: str, body: NotebookCreate):
 
 
 @router.patch("/notebooks/{notebook_id}/emoji", summary="更新笔记本 emoji")
-async def update_notebook_emoji(notebook_id: str, body: NotebookEmojiUpdate):
+async def update_notebook_emoji(notebook_id: str, body: NotebookEmojiUpdate, user_id: CurrentUserId):
+    await _ensure_notebook_owner(notebook_id, user_id)
     ok = await notebook_repository.update_emoji(notebook_id, body.emoji)
     if not ok:
         raise HTTPException(status_code=404, detail="笔记本不存在")
@@ -111,7 +137,8 @@ async def update_notebook_emoji(notebook_id: str, body: NotebookEmojiUpdate):
 
 
 @router.delete("/notebooks/{notebook_id}", summary="删除笔记本")
-async def delete_notebook(notebook_id: str):
+async def delete_notebook(notebook_id: str, user_id: CurrentUserId):
+    await _ensure_notebook_owner(notebook_id, user_id)
     ok = await notebook_repository.delete(notebook_id)
     if not ok:
         raise HTTPException(status_code=404, detail="笔记本不存在")
@@ -131,9 +158,9 @@ async def emoji_from_title(body: TitleEmojiRequest):
 
 @router.post("/documents/upload", response_model=DocumentOut, summary="上传文档")
 async def upload_document(
+    user_id: CurrentUserId,
     file: UploadFile = File(...),
     notebook_id: str = Form(...),
-    user_id: int = Form(_DEFAULT_USER_ID),
 ):
     """
     上传文档到知识库。
@@ -141,7 +168,9 @@ async def upload_document(
     - 自动计算 SHA-256 防重
     - 同笔记本同文件直接返回已有记录
     - 跨笔记本同文件自动秒传 (复制切片 + 向量)
+    - 仅允许上传到当前用户自己的笔记本。
     """
+    await _ensure_notebook_owner(notebook_id, user_id)
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
     if not parsers.is_supported(file.filename):
@@ -180,9 +209,10 @@ async def upload_document(
 # ---------------------------------------------------------------------------
 
 @router.post("/documents/{doc_id}/process", summary="触发解析流水线")
-async def process_document(doc_id: str):
+async def process_document(doc_id: str, user_id: CurrentUserId):
     """
-    触发文档全流程: MinerU 解析 → 语义切块 → Dense+Sparse 向量化 → Milvus 写入
+    触发文档全流程: MinerU 解析 → 语义切块 → Dense+Sparse 向量化 → Milvus 写入。
+    仅限当前用户的文档。
 
     - RAG_USE_QUEUE=true 且 Redis 可用时: 任务入队，立即返回 202，客户端轮询 GET /documents/{id} 查看状态
     - 否则: 同步执行，阻塞直到完成
@@ -191,9 +221,7 @@ async def process_document(doc_id: str):
     """
     from . import tasks
 
-    doc = await document_repository.get_by_id(doc_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="文档不存在")
+    doc = await _ensure_document_owner(doc_id, user_id)
     if doc["status"] == "READY":
         return DocumentOut(**doc)
 
@@ -226,10 +254,11 @@ async def process_document(doc_id: str):
 
 
 @router.post("/documents/{doc_id}/reparse", response_model=DocumentOut, summary="重新解析文档")
-async def reparse_document(doc_id: str):
+async def reparse_document(doc_id: str, user_id: CurrentUserId):
     """
-    重新解析文档: 废弃旧切片+向量, 用最新 MinerU 版本重跑全流程。
+    重新解析文档: 废弃旧切片+向量, 用最新 MinerU 版本重跑全流程。仅限当前用户的文档。
     """
+    await _ensure_document_owner(doc_id, user_id)
     try:
         doc = await service.reparse_document(doc_id)
         return DocumentOut(**doc)
@@ -247,33 +276,34 @@ async def reparse_document(doc_id: str):
 @router.get("/documents", response_model=list[DocumentBrief], summary="文档列表")
 async def list_documents(
     notebook_id: str,
+    user_id: CurrentUserId,
     limit: int = 50,
     offset: int = 0,
 ):
-    """按笔记本查询文档列表"""
+    """按笔记本查询文档列表（仅限当前用户的笔记本）"""
+    await _ensure_notebook_owner(notebook_id, user_id)
     docs = await document_repository.list_by_notebook(notebook_id, limit=limit, offset=offset)
     return [DocumentBrief(**d) for d in docs]
 
 
 @router.get("/documents/{doc_id}", response_model=DocumentOut, summary="文档详情")
-async def get_document(doc_id: str):
-    doc = await document_repository.get_by_id(doc_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="文档不存在")
+async def get_document(doc_id: str, user_id: CurrentUserId):
+    doc = await _ensure_document_owner(doc_id, user_id)
     return DocumentOut(**doc)
 
 
 @router.get("/documents/{doc_id}/chunks", response_model=list[ChunkOut], summary="文档切片列表")
-async def list_chunks(doc_id: str, active_only: bool = True):
-    """查看文档的所有切片 (含 parent-child 关系)"""
+async def list_chunks(doc_id: str, user_id: CurrentUserId, active_only: bool = True):
+    """查看文档的所有切片 (含 parent-child 关系)，仅限当前用户的文档"""
+    await _ensure_document_owner(doc_id, user_id)
     chunks = await chunk_repository.list_by_document(doc_id, active_only=active_only)
     return [ChunkOut(**c) for c in chunks]
 
 
 @router.get("/documents/{doc_id}/markdown", summary="文档还原 Markdown + 来源指南（展开文件预览）")
-async def get_document_markdown(doc_id: str):
+async def get_document_markdown(doc_id: str, user_id: CurrentUserId):
     """
-    按 chunk 顺序还原为片段列表供前端预览；含来源指南总结。
+    按 chunk 顺序还原为片段列表供前端预览；含来源指南总结。仅限当前用户的文档。
 
     实现：从 PostgreSQL 拉取该文档的 active chunks，按 parent/standalone 与 chunk_index 排序，
     每段返回 type、content、chunk_id（便于前端定位高亮）。若 documents.summary 为空，
@@ -281,6 +311,7 @@ async def get_document_markdown(doc_id: str):
 
     返回：{ filename, segments: [{ type, content, chunk_id }], summary }。
     """
+    await _ensure_document_owner(doc_id, user_id)
     try:
         data = await service.get_document_markdown(doc_id)
         return data
@@ -293,8 +324,9 @@ async def get_document_markdown(doc_id: str):
 # ---------------------------------------------------------------------------
 
 @router.delete("/documents/{doc_id}", summary="删除文档")
-async def delete_document(doc_id: str):
-    """删除文档及其所有切片和向量"""
+async def delete_document(doc_id: str, user_id: CurrentUserId):
+    """删除文档及其所有切片和向量，仅限当前用户的文档"""
+    await _ensure_document_owner(doc_id, user_id)
     ok = await service.delete_document(doc_id)
     if not ok:
         raise HTTPException(status_code=404, detail="文档不存在")
@@ -347,9 +379,10 @@ async def rag_stats():
 # ---------------------------------------------------------------------------
 
 @router.post("/search", response_model=SearchResponse, summary="三段式检索")
-async def search_knowledge(body: SearchRequest):
+async def search_knowledge(body: SearchRequest, user_id: CurrentUserId):
     """
     三段式 Pipeline：多路召回 → RRF 粗排 → Reranker 精排。
+    仅允许在当前用户的笔记本/文档范围内检索。
 
     第一段召回:
     - **Path-1 精确匹配** (enable_exact): PostgreSQL FTS + ILIKE,
@@ -368,6 +401,11 @@ async def search_knowledge(body: SearchRequest):
     - Parent-Child 上下文扩展 (use_parent=true)
     - 可按需开关任意一路 (enable_exact / enable_sparse / enable_dense / enable_rerank)
     """
+    if getattr(body, "notebook_id", None):
+        await _ensure_notebook_owner(body.notebook_id, user_id)
+    if getattr(body, "document_ids", None) and body.document_ids:
+        for doc_id in body.document_ids:
+            await _ensure_document_owner(doc_id, user_id)
     try:
         return await service.search(body)
     except Exception as e:
