@@ -3,9 +3,9 @@ AI 聊天平台后端
 基于 FastAPI 构建的多模型 LLM 聊天服务
 """
 import logging
+import os
 import sys
 
-from dotenv import load_dotenv
 from fastapi import FastAPI
 
 # 配置记忆模块日志，确保 [Memory] 输出到终端
@@ -27,8 +27,10 @@ for _name in ("rag.router", "rag.service", "rag.tasks"):
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-# 必须先加载 .env，再导入依赖环境变量的路由模块
-load_dotenv()
+from env_loader import load_backend_env
+
+# 必须先加载环境变量，再导入依赖环境变量的路由模块
+load_backend_env()
 
 from fastapi import HTTPException
 
@@ -44,6 +46,28 @@ from infra.rabbitmq import router as rabbitmq_router
 from infra.elasticsearch import router as es_router
 from infra.mineru.router import router as mineru_router
 from agentic.main import router as agentic_router
+
+
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://192.168.3.38:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _get_allowed_origins() -> list[str]:
+    raw = os.getenv("ALLOWED_ORIGINS", "")
+    origins = [item.strip() for item in raw.split(",") if item.strip()]
+    return origins or DEFAULT_ALLOWED_ORIGINS
 
 # Milvus / RAG 都做成可选加载：
 # 这样即使向量库或 RAG 依赖暂时没装好，基础登录 / 聊天 / Swagger 仍可先起来排障。
@@ -140,13 +164,8 @@ async def api_register(body: UserCreate):
 # CORS 配置：allow_credentials=True 时不能使用 allow_origins=["*"]，否则浏览器会拦截
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://192.168.3.38:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=_get_allowed_origins(),
+    allow_origin_regex=os.getenv("CORS_ALLOW_ORIGIN_REGEX") or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -209,4 +228,9 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     # Windows 下默认关闭 reload，避免父子进程导致的 404 / 无日志 / 路由未生效等问题。
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(
+        "main:app",
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=int(os.getenv("PORT", "8000")),
+        reload=_env_flag("UVICORN_RELOAD", default=False),
+    )

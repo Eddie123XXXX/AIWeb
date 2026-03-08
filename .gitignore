@@ -15,6 +15,9 @@ venv/
 backend/.env
 frontend/.env
 infra/.env
+deploy/.env
+deploy/.env.*
+!deploy/.env*.example
 # 密钥文件
 *.pem
 *.key

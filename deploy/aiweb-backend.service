@@ -1,0 +1,24 @@
+[Unit]
+Description=AIWeb FastAPI backend
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/aiweb/backend
+Environment=APP_DIR=/opt/aiweb/backend
+Environment=ENV_FILE=/opt/aiweb/backend/.env.production
+Environment=PYTHON_BIN=/opt/aiweb/backend/.venv/bin/python
+Environment=HOST=127.0.0.1
+Environment=PORT=8000
+Environment=FORWARDED_ALLOW_IPS=127.0.0.1
+ExecStart=/opt/aiweb/deploy/start-backend.sh
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

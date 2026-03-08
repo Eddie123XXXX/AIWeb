@@ -10,9 +10,9 @@ import sys
 
 # 确保 backend 在 path 上并加载 .env
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from dotenv import load_dotenv
+from env_loader import load_backend_env
 
-load_dotenv()
+load_backend_env()
 
 import asyncpg
 
