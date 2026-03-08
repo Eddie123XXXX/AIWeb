@@ -138,6 +138,31 @@
 
 ## 🚀 快速开始（本地开发）
 
+### Windows 一键启动
+
+如果你在 Windows + PowerShell 环境下，希望由脚本自动提示输入 API Key、生成 `backend/.env`、启动基础设施并拉起前后端，可以直接在项目根目录执行：
+
+```powershell
+.\start-services.ps1 start
+```
+
+脚本会：
+
+- 交互式提示输入 `DEEPSEEK_API_KEY`、`QWEN_API_KEY`，并可选录入 `OPENAI_API_KEY`、联网搜索 Key
+- 自动对齐 `backend/.env` 中的 MinIO / Postgres / Redis / Milvus 连接配置
+- 自动启动 `infra/docker-compose.yml` 中的核心服务
+- 执行 `python -m db.run_schema`
+- 分别打开后端和前端窗口，方便直接看日志
+
+其他常用命令：
+
+```powershell
+.\start-services.ps1 status
+.\start-services.ps1 stop
+.\start-services.ps1 restart
+.\start-services.ps1 logs
+```
+
 1. 克隆仓库并进入项目目录：
 
    ```bash
