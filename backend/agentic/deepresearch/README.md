@@ -1,4 +1,4 @@
-# DeepResearch（Agentic 下）🔎
+# DeepResearch🔎
 
 ## 快速导航
 
@@ -85,8 +85,131 @@
 ### 4. 报告编辑与导出
 
 - 支持报告正文保存
+- 支持 canvas 模式下的所见即所得编辑与草稿恢复
 - 支持选中文本后做局部改写
 - 支持 PDF 导出
+
+## 🖋 Canvas 编辑能力
+
+DeepResearch 在研究完成后，会把报告区切换到一个可编辑的 report canvas。这里的“canvas”不是浏览器 `canvas` 位图绘制，而是一个**可编辑的富文本预览工作区**：
+
+- 前端在 `frontend/src/pages/DeepResearch.jsx` 中维护两份内容：
+  - `savedReportText`：最近一次后端确认保存的正文
+  - `report`：当前工作中的正文草稿
+- 预览区允许直接编辑，前端会把当前 DOM 内容重新序列化回 Markdown/文本字符串，并回写到 `report`
+- 当用户停止编辑一小段时间后，前端会自动调用保存接口，把最新正文写回 `research_sessions.final_report`
+
+实现上分两层持久化：
+
+1. **报告正文持久化**
+   - 通过 `PATCH /sessions/{session_id}` 把当前 `final_report` 存库
+   - 用于真正保存“当前版本的报告正文”
+2. **Canvas 工作态持久化**
+   - 通过 `PATCH /sessions/{session_id}/ui-state` 把 `canvas_state` 写进 `ui_state`
+   - 当前会保存：
+     - `view_mode`
+     - `working_report`
+     - `active_suggestion`
+   - 作用是刷新页面后仍能恢复编辑中的工作态，而不只恢复最后一次保存成功的正文
+
+这也是为什么 DeepResearch 的恢复能力比普通聊天更重：它不仅要恢复“最终结果”，还要恢复“用户正在编辑到哪一步”。
+
+## ✂️ 选中文字用 AI 修改的实现原理
+
+### 1. 前端先把选区变成稳定的文本区间
+
+在 `DeepResearch.jsx` 里，只有满足这些条件时才允许触发选区改写：
+
+- 当前阶段已经 `completed`
+- 当前处于预览 / canvas 编辑模式
+- 当前没有未处理的改写建议
+- 用户在报告正文区域内选中了非空文本
+
+前端会做两步定位：
+
+1. 基于当前预览 DOM 计算选区在预览文本里的 `previewStartOffset` / `previewEndOffset`
+2. 再把这个预览选区映射回真正的报告字符串 `report`，得到最终的：
+   - `startOffset`
+   - `endOffset`
+   - `text`
+
+这样做的目的，是避免因为富文本渲染、换行、节点拆分等原因，导致“页面里看到的选区”和“真正要改写的原始文本片段”对不上。
+
+### 2. 后端做严格 offset 校验
+
+前端调用：
+
+- `POST /sessions/{session_id}/rewrite-selection`
+
+请求体里会带：
+
+- `selected_text`
+- `instruction`
+- `full_report`
+- `start_offset`
+- `end_offset`
+
+后端在 `router.py` 中不会直接信任前端传来的选区文本，而是先执行：
+
+- offset 合法性检查
+- `full_report[start_offset:end_offset] == selected_text` 的严格匹配检查
+
+只有当“选区文本”和“偏移量切出来的原文”完全一致时，才会继续调用改写服务。  
+这一步的意义是防止前端 DOM 选区漂移、正文已变更但选区未同步、或者错误请求把别的片段改掉。
+
+### 3. 改写时只给模型最小必要上下文
+
+`service.py` 里的 `rewrite_selection()` 不会把整篇报告无脑扔给模型，而是采用“选区 + 左右上下文窗口”的方式：
+
+- 截取选区左侧 `1500` 字符
+- 截取选区右侧 `1500` 字符
+- 连同研究主题 `query`
+- 再加上用户的自然语言修改要求 `instruction`
+
+然后构造一个严格的 system prompt，要求模型：
+
+- **只改写选中的那一段**
+- **不要改动选区外内容**
+- **严格返回 JSON**
+- 返回格式固定为：
+  - `rewritten_text`
+  - `summary`
+
+这样做有几个好处：
+
+- 能保留局部段落与全文语境的一致性
+- 降低整篇重写导致的跑偏风险
+- 方便前端把改写结果作为“候选补丁”展示，而不是直接覆盖正文
+
+### 4. 前端先展示候选建议，而不是直接替换
+
+后端返回后，前端不会立即把正文改掉，而是生成一个 `activeSuggestion`：
+
+- 原文区间：`startOffset` / `endOffset`
+- 原文：`originalText`
+- 改写后文本：`rewrittenText`
+- 改写说明：`instruction` / `summary`
+
+UI 上会把这次修改高亮成插入 / 删除预览，并提供：
+
+- `Accept`：接受改写，把原区间替换为新文本
+- `Reject`：拒绝改写，保留原文
+
+也就是说，这个功能本质上更像“AI 生成一个局部 diff 建议”，而不是“模型直接帮你改文档”。
+
+### 5. 接受后再进入正常保存链路
+
+用户点击接受后，前端才会真正把：
+
+- `report.slice(0, startOffset)`
+- `rewrittenText`
+- `report.slice(endOffset)`
+
+拼成新的完整正文，并进入前面提到的 canvas 自动保存 / UI 状态持久化流程。
+
+因此整个链路可以概括为：
+
+**文本选区 -> offset 映射 -> 后端校验 -> LLM 局部改写 -> 前端候选预览 -> 用户确认 -> 正文持久化**
 
 ## 📨 SSE 事件
 
@@ -139,6 +262,13 @@
 - `draft_sections`
 - `streaming_report`
 - `awaiting_user_input`
+- `canvas_state`
+
+其中 `canvas_state` 用于恢复报告编辑工作台，当前主要包含：
+
+- `view_mode`
+- `working_report`
+- `active_suggestion`
 
 ## ⚙️ 环境与依赖
 
