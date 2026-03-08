@@ -34,6 +34,25 @@ def _get_collection_name() -> str:
     return os.getenv("MILVUS_MEMORY_COLLECTION", "agent_memories_vectors")
 
 
+def _get_default_embedding_dim() -> int:
+    """
+    首次查询时 collection 可能尚未创建，此时无法从 embedding 结果推导维度。
+    优先使用记忆专用维度，其次复用 RAG 维度，最后回退到 text-embedding-v4 常用的 1536。
+    """
+    raw = (
+        os.getenv("MEMORY_EMBEDDING_DIM")
+        or os.getenv("RAG_EMBEDDING_DIM")
+        or "1536"
+    ).strip()
+    try:
+        dim = int(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"非法的 embedding 维度配置: {raw}") from exc
+    if dim <= 0:
+        raise RuntimeError(f"embedding 维度必须为正整数: {dim}")
+    return dim
+
+
 def _get_or_create_collection(dim: int | None = None) -> Collection:
     """
     获取（或在第一次调用时创建）用于记忆向量的 collection。
@@ -54,7 +73,7 @@ def _get_or_create_collection(dim: int | None = None) -> Collection:
 
     if not utility.has_collection(name):
         if dim is None:
-            raise RuntimeError("Milvus collection 尚未创建且未提供向量维度 dim")
+            dim = _get_default_embedding_dim()
         fields = [
             FieldSchema(
                 name="id",
