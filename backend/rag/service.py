@@ -49,6 +49,17 @@ from .models import (
 logger = logging.getLogger("rag.service")
 
 
+async def _document_deleted_during_processing(doc_id: str, stage: str) -> bool:
+    """
+    文档可能在同步解析过程中被用户删除。
+    检测到后直接中止后续写库/向量化，避免外键异常把日志刷成失败。
+    """
+    if await document_repository.get_by_id(doc_id):
+        return False
+    logger.info("[RAG] 文档在%s阶段已被删除，终止后续处理: %s", stage, doc_id)
+    return True
+
+
 # ---------------------------------------------------------------------------
 # 辅助: MinIO 操作 (复用 infra.minio.service)
 # ---------------------------------------------------------------------------
@@ -840,6 +851,9 @@ async def process_document(doc_id: str) -> dict[str, Any]:
         )
         logger.info(f"[RAG] 解析完成: blocks={len(blocks)}, markdown_len={md_len}, keys={list(parse_result.keys())}")
 
+        if await _document_deleted_during_processing(doc_id, "解析完成后"):
+            return {}
+
         # ② PARSING → PARSED
         await document_repository.update_status(doc_id, "PARSED")
 
@@ -850,6 +864,9 @@ async def process_document(doc_id: str) -> dict[str, Any]:
                 document_id=doc_id,
                 notebook_id=doc["notebook_id"],
             )
+
+        if await _document_deleted_during_processing(doc_id, "图片预处理后"):
+            return {}
 
         # ④ 版面感知切块
         if blocks:
@@ -881,6 +898,8 @@ async def process_document(doc_id: str) -> dict[str, Any]:
         logger.info(f"[RAG] 切块完成: {parent_count} parents + {child_count} children")
 
         # ④ 全量写入 PostgreSQL (Parent + Child)
+        if await _document_deleted_during_processing(doc_id, "切块完成后"):
+            return {}
         await chunk_repository.deactivate_by_document(doc_id)
         logger.info(f"[RAG] 即将写入 PostgreSQL: {len(chunks)} 条切片")
         chunk_dicts = [
@@ -901,6 +920,8 @@ async def process_document(doc_id: str) -> dict[str, Any]:
         logger.info(f"[RAG] PostgreSQL 切片已写入: {inserted} 条")
 
         # ⑤ PARSED → EMBEDDING (仅 Child Chunk)
+        if await _document_deleted_during_processing(doc_id, "切片入库后"):
+            return {}
         await document_repository.update_status(doc_id, "EMBEDDING")
 
         child_chunks = [c for c in chunks if not c.is_parent]
@@ -912,12 +933,17 @@ async def process_document(doc_id: str) -> dict[str, Any]:
             logger.warning(f"[RAG] 无 Child Chunk 需向量化 (仅 Parent 块)")
 
         # ⑥ EMBEDDING → READY
+        if await _document_deleted_during_processing(doc_id, "向量化完成后"):
+            return {}
         await document_repository.update_status(doc_id, "READY")
         logger.info(f"[RAG] 文档处理完成: {doc_id}, 向量化 {len(child_chunks)} 个 Child Chunk")
 
         return await document_repository.get_by_id(doc_id)
 
     except Exception as e:
+        if not await document_repository.get_by_id(doc_id):
+            logger.info("[RAG] 文档处理过程中已被删除，忽略异常并结束: %s", doc_id)
+            return {}
         error_msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
         logger.error(f"[RAG] 文档处理失败 {doc_id}: {error_msg}")
         await document_repository.update_status(doc_id, "FAILED", error_log=error_msg[:4000])

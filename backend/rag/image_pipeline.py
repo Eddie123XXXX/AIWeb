@@ -280,7 +280,14 @@ async def process_multimodal_image(
         )
     except asyncio.TimeoutError:
         logger.warning("[RAG] 图片 Pipeline 超时，降级为原注")
-        result = _fusion_content(original_caption, "", None, source_image_url)
+        result = {
+            "content": _fusion_content(original_caption, "", None, source_image_url),
+            "metadata": {
+                "image_type_inferred": None,
+                "source_image_url": source_image_url,
+                "pipeline_degraded": "timeout",
+            },
+        }
 
     content = result["content"]
     metadata = result.get("metadata") or {}
