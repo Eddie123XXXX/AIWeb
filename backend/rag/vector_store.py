@@ -46,8 +46,21 @@ def _entity_field(entity: Any, key: str, default: Any = "") -> Any:
         return default
 
 COLLECTION_NAME = "enterprise_rag_knowledge"
-# 与 embedding 模块一致，text-embedding-v4 默认 1536
-DENSE_DIM = 1536
+
+
+def _get_dense_dim() -> int:
+    """
+    与 embedding 模块保持一致，优先读取环境变量。
+    这样在首次创建 collection 时不会再把旧的 1536 维写死到线上环境。
+    """
+    raw = os.getenv("RAG_EMBEDDING_DIM", "1536").strip()
+    try:
+        dim = int(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"非法的 RAG_EMBEDDING_DIM: {raw}") from exc
+    if dim <= 0:
+        raise RuntimeError(f"RAG_EMBEDDING_DIM 必须为正整数: {dim}")
+    return dim
 
 
 def _get_params() -> dict:
@@ -75,10 +88,13 @@ def _connect(alias: str = "default") -> None:
 # Collection 初始化
 # ---------------------------------------------------------------------------
 
-def _get_or_create_collection(dense_dim: int = DENSE_DIM) -> Collection:
+def _get_or_create_collection(dense_dim: Optional[int] = None) -> Collection:
     global _collection
     if _collection is not None:
         return _collection
+
+    if dense_dim is None:
+        dense_dim = _get_dense_dim()
 
     _connect()
     if utility.has_collection(COLLECTION_NAME):

@@ -87,11 +87,11 @@ def upload_image_to_minio(
     用于图片类 block 统一上传，chunk 内容存该 URL。
     """
     try:
-        from infra.minio.service import upload_object, get_presigned_url
+        from infra.minio.service import upload_object, get_presigned_url_for_external
         ext = "png"
         object_name = f"{object_prefix}/{notebook_id}/{document_id}/{uuid.uuid4().hex}.{ext}"
         upload_object(object_name, io.BytesIO(image_bytes), len(image_bytes), content_type="image/png")
-        return get_presigned_url(object_name, expires_seconds=expires_seconds)
+        return get_presigned_url_for_external(object_name, expires_seconds=expires_seconds)
     except Exception as e:
         logger.warning("[RAG] 图片上传 MinIO 失败: %s", e)
         return None
