@@ -10,6 +10,50 @@
 一条命令，把一整套「个人 AI 数据中心」拉起来。  
 这就是 AIWeb 背后安静工作的 **小型云平台**。😎
 
+### 基础设施架构图
+
+```mermaid
+flowchart TB
+    subgraph 后端["Backend (AIWeb)"]
+        App[FastAPI 应用]
+    end
+
+    subgraph 数据与存储["数据与存储"]
+        PG[(PostgreSQL\n:5432)]
+        Redis[(Redis\n:6379)]
+        MinIO[(MinIO\n:9000/9001)]
+        Milvus[(Milvus\n:19530/9091)]
+    end
+
+    subgraph 扩展服务["扩展 / 队列 / 搜索"]
+        RabbitMQ[RabbitMQ\n:5672/15672]
+        ES[Elasticsearch\n:9200/9300]
+    end
+
+    subgraph 解析["文档解析"]
+        MinerU[MinerU API\n:9999]
+    end
+
+    subgraph 管理控制台["Web 控制台"]
+        Attu[Attu :8000]
+        RedisInsight[RedisInsight :5540]
+        pgAdmin[pgAdmin :5050]
+        Kibana[Kibana :5601]
+    end
+
+    App --> PG
+    App --> Redis
+    App --> MinIO
+    App --> Milvus
+    App --> RabbitMQ
+    App --> ES
+    App --> MinerU
+    Attu --> Milvus
+    RedisInsight --> Redis
+    pgAdmin --> PG
+    Kibana --> ES
+```
+
 ## 🔄 实现流程与技术说明
 
 - **启动顺序**：在 **AIWeb 项目根目录** 执行 `docker compose -f infra/docker-compose.yml up -d` 按依赖启动（PostgreSQL、Redis、MinIO、Milvus、RabbitMQ、Elasticsearch 等）；MinerU 需 `--profile mineru-api` 单独拉起。

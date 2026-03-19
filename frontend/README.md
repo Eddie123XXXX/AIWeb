@@ -10,6 +10,58 @@
 这里是 AIWeb 的前端界面：  
 用 React + Vite 写的一个「多模型聊天 + 知识库 + 记忆面板」小控制台。😎
 
+### 前端架构图
+
+```mermaid
+flowchart TB
+    subgraph 路由["React Router"]
+        Login["/login"]
+        Register["/register"]
+        Chat["/"]
+        Wiki["/wiki"]
+        Search["/wiki/search"]
+        DeepResearch["/deep-research"]
+    end
+
+    subgraph 页面与组件["Pages & Components"]
+        Sidebar[Sidebar]
+        Header[Header]
+        ChatArea[Chat / InputArea]
+        MemoryModal[MemoryManageModal]
+        AgenticPanel[AgenticReasoningPanel]
+        ECharts[EChartsRenderer]
+        RAGPage[知识库页]
+        DeepResearchPage[DeepResearch 页]
+    end
+
+    subgraph 状态与请求["Hooks & API"]
+        useChat[useChat]
+        useTheme[useTheme]
+        ragApi[ragApi]
+        fetchAPI[fetch / WebSocket]
+    end
+
+    subgraph 后端["Backend"]
+        API[FastAPI :8000]
+    end
+
+    Login --> useTheme
+    Chat --> Sidebar
+    Chat --> Header
+    Chat --> ChatArea
+    Chat --> useChat
+    Chat --> MemoryModal
+    Chat --> AgenticPanel
+    Chat --> ECharts
+    Wiki --> RAGPage
+    Search --> RAGPage
+    Search --> ragApi
+    DeepResearch --> DeepResearchPage
+    useChat --> fetchAPI
+    ragApi --> fetchAPI
+    fetchAPI --> API
+```
+
 和原来的静态 HTML/CSS/JS 相比，这里多了：
 
 - 组件化布局（Sidebar / Header / Chat / Input）

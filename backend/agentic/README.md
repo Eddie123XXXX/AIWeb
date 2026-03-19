@@ -15,6 +15,49 @@
 
 ---
 
+### Agentic 模块架构图
+
+```mermaid
+flowchart TB
+    subgraph 入口["API"]
+        WS["/api/agentic/ws"]
+        HTTP["POST /api/agentic/chat"]
+    end
+
+    subgraph 引擎["Agent 引擎"]
+        State[AgentState]
+        Loop[run_agent_graph\nReAct 状态机]
+        LLM[call_llm]
+        Tools[execute_tools]
+    end
+
+    subgraph 工具["ToolRegistry"]
+        Builtin[内置\nuser_memory/knowledge_search\nweb_search/data_analyzer/chart_generator]
+        Skill[SkillTool]
+        MCP[MCPTool / RemoteMCPTool]
+        Worker[WorkerTool]
+    end
+
+    subgraph 依赖["依赖模块"]
+        Memory[memory]
+        RAG[rag]
+        MCPClient[MCP Client]
+    end
+
+    WS --> Loop
+    HTTP --> Loop
+    Loop --> State
+    Loop --> LLM
+    Loop --> Tools
+    Tools --> Builtin
+    Tools --> Skill
+    Tools --> MCP
+    Tools --> Worker
+    Builtin --> Memory
+    Builtin --> RAG
+    MCP --> MCPClient
+```
+
 ## ✨ 功能特性
 
 - **ReAct 推理循环**

@@ -9,6 +9,44 @@
 
 数据库主要负责用户、会话、消息以及 Agent 记忆等结构化信息的持久化，是 AIWeb 的「记事本 + 索引库」。📒
 
+### DB 层架构图
+
+```mermaid
+flowchart TB
+    subgraph 建表["建表 run_schema"]
+        Schema[schema_*.sql 按序执行]
+    end
+
+    subgraph 表["核心表"]
+        Users[users\nuser_profiles\nuser_oauths]
+        Conv[conversations\nmessages]
+        Research[research_sessions]
+        Mem[agent_memories]
+        NB[notebooks\ndocuments\ndocument_chunks]
+    end
+
+    subgraph 访问["Repository / 业务"]
+        Auth[auth/]
+        UserR[routers/user]
+        ChatR[chat / chat_context]
+        DeepR[deepresearch]
+        MemS[memory/service]
+        RAG[rag/]
+    end
+
+    Schema --> Users
+    Schema --> Conv
+    Schema --> Research
+    Schema --> Mem
+    Schema --> NB
+    Auth --> Users
+    UserR --> Users
+    ChatR --> Conv
+    DeepR --> Research
+    MemS --> Mem
+    RAG --> NB
+```
+
 ## 🔄 实现流程
 
 - **建表**：在 `backend` 目录执行 `python -m db.run_schema`，脚本按依赖顺序执行各 `schema_*.sql`（users → user_profiles → user_oauths → conversations → messages → research_sessions → agent_memories → notebooks → documents → document_chunks）。环境变量使用 `POSTGRES_*`，与 infra 一致。

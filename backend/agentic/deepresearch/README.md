@@ -36,6 +36,54 @@
 | 前端恢复 | 历史消息 + 流状态 | 历史消息 + trace | `ui_state` + sources + final_report |
 | 模型选择 | 前端 `model_id` 生效 | 前端 `model_id` 生效 | 当前固定 `deepseek-v3.2` |
 
+### DeepResearch 架构图
+
+```mermaid
+flowchart TB
+    subgraph 前端["Frontend"]
+        Stream[POST /deepresearch/stream]
+        Confirm[用户确认大纲]
+        Continue[继续研究]
+        Edit[报告编辑 / PDF 导出]
+    end
+
+    subgraph 后端["Backend SSE"]
+        Planning[planning_only\n章节框架]
+        Await[awaiting_outline_confirmation]
+        Research[检索 / 写作 / 审校]
+        Complete[research_complete]
+    end
+
+    subgraph 角色["多角色协作"]
+        Architect[ResearchArchitect]
+        Researcher[Research]
+        Analyst[DataAnalyst]
+        Chart[ChartGenerate]
+        Writer[Writer]
+        Reviewer[Reviewer]
+    end
+
+    subgraph 持久化["持久化"]
+        Sessions[(research_sessions)]
+        UIState[ui_state]
+        Sources[sources]
+    end
+
+    Stream --> Planning
+    Planning --> Await
+    Confirm --> Continue
+    Continue --> Research
+    Research --> Architect
+    Research --> Researcher
+    Research --> Writer
+    Research --> Reviewer
+    Research --> Complete
+    Complete --> Sessions
+    Complete --> UIState
+    Complete --> Sources
+    Edit --> Sessions
+```
+
 ## 🔄 核心流程
 
 1. 前端提交研究主题到 `POST /api/agentic/deepresearch/stream`

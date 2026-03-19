@@ -11,6 +11,54 @@
 
 > 文档怎么变成可检索的知识、怎么把最相关的片段精准捞出来，都在这个模块里实现。
 
+### RAG 模块架构图
+
+```mermaid
+flowchart TB
+    subgraph 入口["API 入口"]
+        Upload[POST /documents/upload]
+        Process[POST /documents/process]
+        Search[POST /search]
+    end
+
+    subgraph 流水线["文档流水线"]
+        MinIOStore[MinIO 存储]
+        Parser[解析\nMinerU / pdfplumber / 多格式]
+        BlockNorm[Block 规范化]
+        ImgPipe[图片管线\n上传+VLM]
+        Chunking[版面感知切块\nParent-Child]
+        PGWrite[PostgreSQL 切片]
+        Embed[Dense+Sparse 向量化]
+        MilvusWrite[Milvus 写入]
+    end
+
+    subgraph 检索["检索流水线"]
+        Exact[精确 Top10]
+        Sparse[Sparse Top60]
+        Dense[Dense Top60]
+        RRF[RRF 融合 Top20]
+        Rerank[Reranker 精排]
+        Hit[SearchHit 溯源]
+    end
+
+    Upload --> MinIOStore
+    Process --> Parser
+    Parser --> BlockNorm
+    BlockNorm --> ImgPipe
+    ImgPipe --> Chunking
+    Chunking --> PGWrite
+    Chunking --> Embed
+    Embed --> MilvusWrite
+    Search --> Exact
+    Search --> Sparse
+    Search --> Dense
+    Exact --> RRF
+    Sparse --> RRF
+    Dense --> RRF
+    RRF --> Rerank
+    Rerank --> Hit
+```
+
 ---
 
 ## ✨ 功能概览

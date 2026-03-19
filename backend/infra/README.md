@@ -10,6 +10,46 @@
 本目录用于集中管理对接**外部/基础设施**的代码（如 MinIO、Redis、数据库等），  
 和业务路由 `routers/`、通用业务服务 `services/` 分层，方便你在不「拆后端」的前提下疯狂扩展能力。😄
 
+### 后端 Infra 架构图
+
+```mermaid
+flowchart TB
+    subgraph main["main.py"]
+        Include[include_router]
+    end
+
+    subgraph 适配层["infra 子模块"]
+        MinIO[minio\nservice + router]
+        Redis[redis\nservice + router]
+        Postgres[postgres\nservice + router]
+        Milvus[milvus\nservice + router]
+        RabbitMQ[rabbitmq\nservice + router]
+        ES[elasticsearch\nservice + router]
+    end
+
+    subgraph 调用方["业务调用方"]
+        QuickParse[quick_parse]
+        RAG[rag/service]
+        ChatCtx[chat_context]
+        Repo[db/*_repository]
+        MemVec[memory/vector_store]
+        RAGVec[rag/vector_store]
+    end
+
+    Include --> MinIO
+    Include --> Redis
+    Include --> Postgres
+    Include --> Milvus
+    Include --> RabbitMQ
+    Include --> ES
+    QuickParse --> MinIO
+    RAG --> MinIO
+    ChatCtx --> Redis
+    Repo --> Postgres
+    MemVec --> Milvus
+    RAGVec --> Milvus
+```
+
 ## 🔄 实现流程
 
 - **挂载**：在 `main.py` 中 `from infra.xxx import router` 并 `app.include_router(router, prefix="/api")`，健康检查与调试接口统一在 `/api` 下（如 `/api/redis/health`、`/api/postgres/health`）。

@@ -13,6 +13,53 @@
 前端聊天页里的“更多工具”复选框，本质上就是对这里注册出来的工具做白名单过滤：  
 工具注册了，不代表每轮都一定暴露给模型；是否启用，还要看前端本轮勾选结果。
 
+### 工具模块架构图
+
+```mermaid
+flowchart TB
+    subgraph 注册["注册流程"]
+        Builtins[register_builtins]
+        Settings[register_dynamic_from_settings]
+        Markdown[load_markdown_skills]
+        Discover[discover_and_register_mcp_tools]
+    end
+
+    subgraph 内置["内置工具"]
+        UserMem[user_memory]
+        KnowSearch[knowledge_search]
+        WebSearch[web_search]
+        DataAnalyzer[data_analyzer]
+        ChartGen[chart_generator]
+    end
+
+    subgraph 扩展["扩展工具"]
+        SkillTool[SkillTool]
+        MCPTool[MCPTool]
+        RemoteMCP[RemoteMCPTool]
+        WorkerTool[WorkerTool]
+    end
+
+    subgraph 依赖["依赖"]
+        Memory[memory 模块]
+        RAG[rag 模块]
+        MCP[MCP Client]
+    end
+
+    Builtins --> UserMem
+    Builtins --> KnowSearch
+    Builtins --> WebSearch
+    Builtins --> DataAnalyzer
+    Builtins --> ChartGen
+    Settings --> SkillTool
+    Settings --> MCPTool
+    Markdown --> SkillTool
+    Discover --> RemoteMCP
+    UserMem --> Memory
+    KnowSearch --> RAG
+    MCPTool --> MCP
+    RemoteMCP --> MCP
+```
+
 ## ✨ 内置工具
 
 以下工具在 `tools_registry.register_builtins()` 中自动注册，全局可用。

@@ -1,5 +1,15 @@
 # AIWeb 🚀
 
+## 🎯 体验模块
+
+**在线体验**：[https://personalaiweb.top](https://personalaiweb.top)
+
+在浏览器中直接体验多模型聊天、长期记忆、RAG 知识库、Agentic 工具调用与 DeepResearch 深度研究等完整能力。
+测试用账户：xingjianglong2025@163.com
+测试用密码：123456
+
+---
+
 ## 快速导航
 
 - 项目概览：功能、架构、目录、Roadmap
@@ -19,6 +29,68 @@
 前端基于 React + Vite，后端基于 FastAPI，整合「聊天 / 记忆 / 知识库 / 文件解析」等能力，帮你在本地或私有环境里搭建**自己的 AI 助手控制台**。😎
 
 > 如果你觉得「只用一个浏览器 tab」就能管理模型、记忆、RAG 和文件，那大概就是这个项目想给你的感觉。
+
+### 主程序架构图
+
+```mermaid
+flowchart TB
+    subgraph 用户端["🖥️ 用户端"]
+        Browser[浏览器]
+    end
+
+    subgraph 前端["Frontend (React + Vite)"]
+        UI[聊天 / 知识库 / 深度研究]
+        WS[WebSocket / SSE]
+        API[HTTP API]
+    end
+
+    subgraph 后端["Backend (FastAPI)"]
+        Chat[聊天路由]
+        RAG[RAG 模块]
+        Memory[记忆模块]
+        Agentic[Agentic 模块]
+        ASR[语音识别]
+        Auth[认证]
+    end
+
+    subgraph 服务层["Services"]
+        LLM[LLM 调用]
+        ChatCtx[对话上下文]
+        QuickParse[Quick Parse]
+    end
+
+    subgraph 存储["存储与基础设施"]
+        PG[(PostgreSQL)]
+        Redis[(Redis)]
+        MinIO[(MinIO)]
+        Milvus[(Milvus)]
+    end
+
+    Browser --> UI
+    UI --> WS
+    UI --> API
+    WS --> Chat
+    WS --> Agentic
+    API --> RAG
+    API --> Memory
+    API --> ASR
+    API --> Auth
+    Chat --> LLM
+    Chat --> ChatCtx
+    Chat --> Memory
+    Chat --> QuickParse
+    Agentic --> LLM
+    Agentic --> RAG
+    Agentic --> Memory
+    RAG --> MinIO
+    RAG --> PG
+    RAG --> Milvus
+    Memory --> PG
+    Memory --> Milvus
+    ChatCtx --> PG
+    ChatCtx --> Redis
+    QuickParse --> MinIO
+```
 
 ## ✨ 功能概览
 

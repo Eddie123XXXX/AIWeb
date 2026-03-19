@@ -16,6 +16,59 @@
 基于 FastAPI 构建的多模型 LLM 聊天服务后端，是整个 AIWeb 的「中枢神经」。  
 负责把模型、记忆、RAG、文件解析、用户体系这些能力都串起来。
 
+### 后端架构图
+
+```mermaid
+flowchart LR
+    subgraph 路由层["Routers"]
+        ChatR[chat]
+        HistoryR[history]
+        ModelsR[models]
+        UserR[user]
+        ASRR[asr]
+        MemoryR[memory]
+        RAGRouter[rag/router]
+        AgenticR[agentic]
+    end
+
+    subgraph 业务层["Services / 业务模块"]
+        ChatCtx[chat_context]
+        LLM[llm_service]
+        QuickParse[quick_parse]
+        MemoryS[memory]
+        RAGS[rag/service]
+        AgenticS[agentic]
+    end
+
+    subgraph 数据层["DB / Infra"]
+        Repo[*_repository]
+        Redis[(Redis)]
+        PG[(PostgreSQL)]
+        MinIO[(MinIO)]
+        Milvus[(Milvus)]
+    end
+
+    ChatR --> ChatCtx
+    ChatR --> LLM
+    ChatR --> MemoryS
+    ChatR --> QuickParse
+    MemoryR --> MemoryS
+    RAGRouter --> RAGS
+    AgenticR --> AgenticS
+    AgenticS --> LLM
+    AgenticS --> MemoryS
+    AgenticS --> RAGS
+    ChatCtx --> Repo
+    MemoryS --> Repo
+    MemoryS --> Milvus
+    RAGS --> Repo
+    RAGS --> MinIO
+    RAGS --> Milvus
+    QuickParse --> MinIO
+    Repo --> PG
+    ChatCtx --> Redis
+```
+
 ## ✨ 功能特性
 
 - 🤖 **多模型支持**
@@ -381,17 +434,6 @@ python -m test_chat_flow
 # 记忆模块全功能测试
 python -m memory.test_memory_full
 ```
-
-## 🗺 后续规划 / 进度同步
-
-- [x] 对话历史持久化（PostgreSQL + Redis）
-- [x] 文件上传与解析（Quick Parse，基于 MinIO）
-- [x] 长期记忆模块（memory，Milvus + PostgreSQL）
-- [x] RAG 知识库（上传/解析/切块/向量化/三段式检索/来源指南）
-- [x] 语音识别 ASR（Qwen3-ASR-Flash，webm→MP3）
-- [x] 记忆管理 HTTP API（列表/新增/编辑/删除，编辑触发 re-embed）
-- [ ] 用户认证 / 多用户隔离（JWT 已接入，多租户完善中）
-- [ ] 使用统计与配额（调用次数 / Token 用量）
 
 如果你想「只用后端」做自己的多模型聊天服务，也完全没问题 ——  
 把 `/api/models` 和 `/api/chat` 当成 OpenAI 兼容接口来打就行了。😉
